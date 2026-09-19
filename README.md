@@ -8,7 +8,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 
 ## Features
 
-- Fingerprint clock in/out using the laptop's built-in reader (Windows Hello via WebAuthn)
+- Face recognition on the laptop webcam picks the staff member; fingerprint confirms them (Windows Hello via WebAuthn)
 - Lunch break per shift (start and end by fingerprint), deducted from hours worked
 - Kiosk screen that works without a login; admin controls only appear while an admin is signed in
 - Staff identified by phone number, email optional, login with either
@@ -41,17 +41,19 @@ Data lives in `%LOCALAPPDATA%\CafeAttendance\attendance.db`. Back it up by copyi
 1. **Windows Hello:** Settings, Accounts, Sign-in options, Fingerprint recognition. Set a PIN, then add each staff member's finger to this Windows account (Windows allows 10 fingers per account).
 2. Open the app, click **Admin login** on the kiosk, sign in.
 3. **Users:** add each staff member with a phone number.
-4. **Kiosk:** click **Enroll** under each person and have them touch the reader.
+4. **Kiosk:** for each person click **Enroll finger** and have them touch the reader. Then have them look at the camera and click **Enroll face**; repeat **Add face sample** 2 or 3 times from slightly different angles.
 5. **Log out.** The kiosk keeps working; Enroll and Revoke buttons disappear.
 
-Daily use: tap your name, touch the reader. Card turns green when clocked in.
+Daily use: stand in front of the camera. The kiosk greets you by name and shows Clock in / Clock out / Lunch buttons. Tap one, touch the reader. If the camera does not recognise you, tap your name instead. Card turns green when clocked in.
 While clocked in a **Lunch** button appears: tap it and touch the reader to start
 lunch (card turns amber), tap **Back from lunch** to end it. One lunch per shift.
 If someone forgets to end lunch, clocking out ends it.
 
 Limits to know:
 
-- Windows Hello confirms "an enrolled finger on this Windows account", not which finger. Any enrolled staff finger can unlock any staff card. For real per-person identification use an external USB scanner with a 1:N SDK.
+- Windows Hello confirms "an enrolled finger on this Windows account", not which finger. Face recognition supplies the "who"; the finger proves a live person is present. A photo of a coworker plus any enrolled finger could still fool it, so keep the camera at the counter in view of others.
+- Face recognition needs decent light and a camera roughly at face height. Masks, caps and strong backlight cause misses; the kiosk then falls back to tapping your name.
+- Face data is stored as a 128-number template on the laptop only, never as photos. Get staff consent; **Remove face** deletes it.
 - Windows Hello allows a PIN fallback; the browser cannot disable it.
 - 10 fingers per Windows account is a Windows limit.
 
@@ -100,7 +102,7 @@ Set in `source/installer/start.cmd` for installed copies, or `.env` in developme
 
 ## Stack
 
-Next.js 13, Prisma, SQLite, SimpleWebAuthn, nodemailer, Inno Setup.
+Next.js 13, Prisma, SQLite, SimpleWebAuthn, face-api.js (TensorFlow.js), nodemailer, ExcelJS, Inno Setup.
 
 ## License
 

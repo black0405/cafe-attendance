@@ -13,6 +13,7 @@ export async function GET() {
       name: true,
       phone: true,
       credentials: { select: { id: true } },
+      faces: { select: { id: true }, take: 1 },
       records: {
         where: { clockOut: null },
         select: { clockIn: true, lunchStart: true, lunchEnd: true },
@@ -26,6 +27,7 @@ export async function GET() {
       id: u.id,
       name: u.name || u.phone || `Staff #${u.id}`,
       enrolled: u.credentials.length > 0,
+      faceEnrolled: u.faces.length > 0,
       clockedInAt: u.records[0]?.clockIn ?? null,
       onLunchSince:
         u.records[0]?.lunchStart && !u.records[0]?.lunchEnd

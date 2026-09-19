@@ -1,24 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   startAuthentication,
   startRegistration,
   browserSupportsWebAuthn,
 } from "@simplewebauthn/browser";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, Camera } from "lucide-react";
 
 interface Staff {
   id: number;
   name: string;
-  enrolled: boolean;
+  enrolled: boolean; // fingerprint
+  faceEnrolled: boolean;
   clockedInAt: string | null;
   onLunchSince: string | null;
   lunchTaken: boolean;
 }
 
 type Banner = { kind: "ok" | "err"; text: string } | null;
+type Action = "punch" | "lunch";
 
 // Admin buttons appear only while an admin is logged in on this browser.
 // Log out after enrolling so staff at the counter cannot enrol or revoke.
@@ -43,12 +45,37 @@ async function getJson(url: string, init?: RequestInit) {
 const fmtTime = (d: string | Date) =>
   new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const WORDS: Record<string, string> = {
+  in: "clocked in",
+  out: "clocked out",
+  "lunch-start": "started lunch",
+  "lunch-end": "back from lunch",
+};
+
+// Face must fill at least this share of the frame width, so people walking
+// past in the background are ignored.
+const MIN_FACE_RATIO = 0.22;
+const RECOGNISE_COOLDOWN_MS = 12_000;
+
 export default function KioskPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [banner, setBanner] = useState<Banner>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [supported, setSupported] = useState(true);
+
+  // face state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const faceapiRef = useRef<any>(null);
+  const [camState, setCamState] = useState<"loading" | "ready" | "off" | "nocam" | "error">("loading");
+  const [recognised, setRecognised] = useState<Staff | null>(null);
+  const lastSeen = useRef<{ id: number; at: number } | null>(null);
+  const staffRef = useRef<Staff[]>([]);
+  const busyRef = useRef<number | null>(null);
+  const recognisedRef = useRef<Staff | null>(null);
+  staffRef.current = staff;
+  busyRef.current = busy;
+  recognisedRef.current = recognised;
 
   const load = () =>
     getJson("/api/kiosk/staff")
@@ -69,6 +96,101 @@ export default function KioskPage() {
     return () => clearTimeout(t);
   }, [banner]);
 
+  // Recognised panel auto-dismisses.
+  useEffect(() => {
+    if (!recognised) return;
+    const t = setTimeout(() => setRecognised(null), 10_000);
+    return () => clearTimeout(t);
+  }, [recognised]);
+
+  // Camera + models + detection loop.
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+
+    const loop = () => {
+      if (stopped) return;
+      timer = setTimeout(async () => {
+        try {
+          if (!busyRef.current && !recognisedRef.current) await scan();
+        } finally {
+          loop();
+        }
+      }, 700);
+    };
+
+    (async () => {
+      try {
+        // Browser bundle (tfjs included). The package default is the Node build.
+        const faceapi = await import("@vladmandic/face-api/dist/face-api.esm.js");
+        faceapiRef.current = faceapi;
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri("/models"),
+          faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
+        ]);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: "user" },
+        });
+        if (stopped || !videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCamState("ready");
+        loop();
+      } catch (e) {
+        console.error("camera/model init failed", e);
+        setCamState(
+          e instanceof DOMException
+            ? e.name === "NotFoundError"
+              ? "nocam"
+              : "off"
+            : "error"
+        );
+      }
+    })();
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const detectDescriptor = async (): Promise<Float32Array | null> => {
+    const faceapi = faceapiRef.current;
+    const video = videoRef.current;
+    if (!faceapi || !video || video.readyState < 2) return null;
+    const det = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+    if (!det) return null;
+    if (det.detection.box.width / video.videoWidth < MIN_FACE_RATIO) return null;
+    return det.descriptor as Float32Array;
+  };
+
+  const scan = async () => {
+    const descriptor = await detectDescriptor();
+    if (!descriptor) return;
+    let match: { userId: number; name: string };
+    try {
+      match = await getJson("/api/kiosk/face/identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descriptor: Array.from(descriptor) }),
+      });
+    } catch {
+      return; // unknown face: stay quiet, they can tap their name
+    }
+    const seen = lastSeen.current;
+    if (seen && seen.id === match.userId && Date.now() - seen.at < RECOGNISE_COOLDOWN_MS) return;
+    lastSeen.current = { id: match.userId, at: Date.now() };
+    const s = staffRef.current.find((x) => x.id === match.userId);
+    if (s) setRecognised(s);
+  };
+
   const run = async (id: number, fn: () => Promise<string>, fallback: string) => {
     setBusy(id);
     try {
@@ -78,17 +200,13 @@ export default function KioskPage() {
       setBanner({ kind: "err", text: e instanceof Error ? e.message : fallback });
     } finally {
       setBusy(null);
+      setRecognised(null);
+      lastSeen.current = { id, at: Date.now() };
     }
   };
 
-  const WORDS: Record<string, string> = {
-    in: "clocked in",
-    out: "clocked out",
-    "lunch-start": "started lunch",
-    "lunch-end": "back from lunch",
-  };
-
-  const punch = (s: Staff, action: "punch" | "lunch" = "punch") =>
+  // Fingerprint step. Face may have picked the person, but the finger confirms them.
+  const punch = (s: Staff, action: Action = "punch") =>
     run(
       s.id,
       async () => {
@@ -109,45 +227,64 @@ export default function KioskPage() {
       s.id,
       async () => {
         const headers = adminHeaders();
-        const { options, token } = await getJson(
-          `/api/kiosk/enroll?userId=${s.id}`,
-          { headers }
-        );
+        const { options, token } = await getJson(`/api/kiosk/enroll?userId=${s.id}`, { headers });
         const response = await startRegistration({ optionsJSON: options });
         await getJson("/api/kiosk/enroll", {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify({ token, response, label: navigator.platform }),
         });
-        return `${s.name} enrolled on this laptop`;
+        return `${s.name} fingerprint enrolled on this laptop`;
       },
       "Enrollment failed"
     );
 
-  const revoke = (s: Staff) => {
-    if (!window.confirm(`Remove ${s.name}'s fingerprint from this laptop?`)) return;
+  const enrollFace = (s: Staff) =>
     run(
       s.id,
       async () => {
-        await getJson(`/api/kiosk/enroll?userId=${s.id}`, {
-          method: "DELETE",
-          headers: adminHeaders(),
+        const descriptor = await detectDescriptor();
+        if (!descriptor) throw new Error("No face in view. Look at the camera, close up.");
+        const data = await getJson("/api/kiosk/face/enroll", {
+          method: "POST",
+          headers: { ...adminHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: s.id, descriptor: Array.from(descriptor) }),
         });
-        return `${s.name} fingerprint removed`;
+        return `${s.name} face sample ${data.samples} saved (take 2 or 3 from slightly different angles)`;
+      },
+      "Face enrollment failed"
+    );
+
+  const revoke = (s: Staff, what: "finger" | "face") => {
+    if (!window.confirm(`Remove ${s.name}'s ${what === "face" ? "face" : "fingerprint"} from this laptop?`)) return;
+    run(
+      s.id,
+      async () => {
+        const url = what === "face" ? `/api/kiosk/face/enroll?userId=${s.id}` : `/api/kiosk/enroll?userId=${s.id}`;
+        await getJson(url, { method: "DELETE", headers: adminHeaders() });
+        return `${s.name} ${what === "face" ? "face" : "fingerprint"} removed`;
       },
       "Revoke failed"
     );
   };
 
+  const camText = {
+    loading: "Starting camera…",
+    ready: "Look at the camera",
+    off: "Camera blocked. Allow camera access in the browser, or tap your name.",
+    nocam: "No camera found on this laptop. Tap your name.",
+    error: "Face recognition unavailable. Tap your name.",
+  }[camState];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Fingerprint className="h-8 w-8" /> Clock In / Out
           </h1>
           <div className="text-sm text-gray-500 flex items-center gap-4">
-            <span>Tap your name, then touch the fingerprint reader</span>
+            <span>Look at the camera or tap your name, then touch the fingerprint reader</span>
             <Link href={isAdmin ? "/dashboard" : "/"} className="underline">
               {isAdmin ? "Dashboard" : "Admin login"}
             </Link>
@@ -156,15 +293,13 @@ export default function KioskPage() {
 
         {!supported && (
           <div className="mb-4 p-3 rounded bg-red-100 text-red-800">
-            This browser does not support fingerprint sign-in. Use Chrome or Edge
-            with Windows Hello set up.
+            This browser does not support fingerprint sign-in. Use Chrome or Edge with Windows Hello set up.
           </div>
         )}
 
         {isAdmin && (
           <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-900 text-sm">
-            Admin mode: Enroll / Revoke buttons are visible. Log out from the
-            dashboard before leaving the kiosk unattended.
+            Admin mode: Enroll / Revoke buttons are visible. Log out from the dashboard before leaving the kiosk unattended.
           </div>
         )}
 
@@ -172,86 +307,134 @@ export default function KioskPage() {
           <div
             role="status"
             className={`mb-4 p-4 rounded text-lg font-medium ${
-              banner.kind === "ok"
-                ? "bg-green-100 text-green-800"
-                : "bg-red-100 text-red-800"
+              banner.kind === "ok" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
             }`}
           >
             {banner.text}
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {staff.map((s) => (
-            <div
-              key={s.id}
-              className={`rounded-lg border p-4 flex flex-col gap-2 ${
-                s.onLunchSince
-                  ? "border-amber-500 bg-amber-50"
-                  : s.clockedInAt
-                  ? "border-green-500 bg-green-50"
-                  : "bg-white"
-              }`}
-            >
-              <button
-                onClick={() => punch(s)}
-                disabled={busy !== null || !s.enrolled || !supported}
-                className="text-left disabled:opacity-40"
-              >
-                <div className="text-lg font-semibold truncate">{s.name}</div>
-                <div className="text-sm text-gray-600">
-                  {!s.enrolled
-                    ? "Not enrolled"
-                    : s.onLunchSince
-                    ? `On lunch since ${fmtTime(s.onLunchSince)}`
-                    : s.clockedInAt
-                    ? `In since ${fmtTime(s.clockedInAt)}`
-                    : "Out"}
+        <div className="grid md:grid-cols-[320px_1fr] gap-6">
+          {/* Camera panel */}
+          <div className="space-y-3">
+            <div className="relative rounded-lg overflow-hidden bg-black aspect-[4/3]">
+              <video ref={videoRef} muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
+              <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-sm px-3 py-2 flex items-center gap-2">
+                <Camera className="h-4 w-4" /> {camText}
+              </div>
+            </div>
+
+            {recognised && (
+              <div className="rounded-lg border-2 border-blue-500 bg-blue-50 p-4 space-y-3">
+                <div className="text-lg font-semibold">Hi {recognised.name}</div>
+                <div className="text-sm text-gray-700">
+                  {recognised.onLunchSince
+                    ? `On lunch since ${fmtTime(recognised.onLunchSince)}`
+                    : recognised.clockedInAt
+                    ? `Clocked in at ${fmtTime(recognised.clockedInAt)}`
+                    : "Clocked out"}
                 </div>
-                {busy === s.id && (
-                  <div className="text-sm text-blue-600 mt-1">
-                    Touch the reader…
+                {!recognised.enrolled ? (
+                  <div className="text-sm text-red-700">No fingerprint enrolled. Ask the admin.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => punch(recognised)}
+                      disabled={busy !== null || !supported}
+                      className={`px-4 py-2 rounded-md text-white font-medium ${
+                        recognised.clockedInAt ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
+                      } disabled:opacity-50`}
+                    >
+                      {recognised.clockedInAt ? "Clock out" : "Clock in"}
+                    </button>
+                    {recognised.clockedInAt && !recognised.lunchTaken && (
+                      <button
+                        onClick={() => punch(recognised, "lunch")}
+                        disabled={busy !== null || !supported}
+                        className="px-4 py-2 rounded-md border border-amber-400 text-amber-800 bg-white hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        {recognised.onLunchSince ? "Back from lunch" : "Lunch"}
+                      </button>
+                    )}
+                    <button onClick={() => setRecognised(null)} className="px-3 py-2 text-sm text-gray-600 underline">
+                      Not me
+                    </button>
                   </div>
                 )}
-              </button>
+                <div className="text-xs text-gray-500">Then touch the fingerprint reader.</div>
+              </div>
+            )}
+          </div>
 
-              {s.enrolled && s.clockedInAt && !s.lunchTaken && (
+          {/* Staff grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 content-start">
+            {staff.map((s) => (
+              <div
+                key={s.id}
+                className={`rounded-lg border p-4 flex flex-col gap-2 ${
+                  recognised?.id === s.id
+                    ? "border-blue-500 ring-2 ring-blue-300"
+                    : s.onLunchSince
+                    ? "border-amber-500 bg-amber-50"
+                    : s.clockedInAt
+                    ? "border-green-500 bg-green-50"
+                    : "bg-white"
+                }`}
+              >
                 <button
-                  onClick={() => punch(s, "lunch")}
-                  disabled={busy !== null || !supported}
-                  className="text-sm px-3 py-1 rounded border border-amber-400 text-amber-800 bg-white hover:bg-amber-100 disabled:opacity-40"
+                  onClick={() => punch(s)}
+                  disabled={busy !== null || !s.enrolled || !supported}
+                  className="text-left disabled:opacity-40"
                 >
-                  {s.onLunchSince ? "Back from lunch" : "Lunch"}
+                  <div className="text-lg font-semibold truncate">{s.name}</div>
+                  <div className="text-sm text-gray-600">
+                    {!s.enrolled
+                      ? "No fingerprint"
+                      : s.onLunchSince
+                      ? `On lunch since ${fmtTime(s.onLunchSince)}`
+                      : s.clockedInAt
+                      ? `In since ${fmtTime(s.clockedInAt)}`
+                      : "Out"}
+                  </div>
+                  {busy === s.id && <div className="text-sm text-blue-600 mt-1">Touch the reader…</div>}
                 </button>
-              )}
 
-              {isAdmin && (
-                <div className="flex gap-2 text-xs mt-auto pt-2 border-t">
+                {s.enrolled && s.clockedInAt && !s.lunchTaken && (
                   <button
-                    onClick={() => enroll(s)}
+                    onClick={() => punch(s, "lunch")}
                     disabled={busy !== null || !supported}
-                    className="text-blue-600 hover:underline disabled:opacity-40"
+                    className="text-sm px-3 py-1 rounded border border-amber-400 text-amber-800 bg-white hover:bg-amber-100 disabled:opacity-40"
                   >
-                    {s.enrolled ? "Add device" : "Enroll"}
+                    {s.onLunchSince ? "Back from lunch" : "Lunch"}
                   </button>
-                  {s.enrolled && (
-                    <button
-                      onClick={() => revoke(s)}
-                      disabled={busy !== null}
-                      className="text-red-600 hover:underline disabled:opacity-40"
-                    >
-                      Revoke
+                )}
+
+                {isAdmin && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-auto pt-2 border-t">
+                    <button onClick={() => enroll(s)} disabled={busy !== null || !supported} className="text-blue-600 hover:underline disabled:opacity-40">
+                      {s.enrolled ? "Add finger" : "Enroll finger"}
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          {staff.length === 0 && (
-            <div className="col-span-full text-gray-500">
-              No staff yet. Add users from the dashboard.
-            </div>
-          )}
+                    {s.enrolled && (
+                      <button onClick={() => revoke(s, "finger")} disabled={busy !== null} className="text-red-600 hover:underline disabled:opacity-40">
+                        Remove finger
+                      </button>
+                    )}
+                    <button onClick={() => enrollFace(s)} disabled={busy !== null || camState !== "ready"} className="text-blue-600 hover:underline disabled:opacity-40">
+                      {s.faceEnrolled ? "Add face sample" : "Enroll face"}
+                    </button>
+                    {s.faceEnrolled && (
+                      <button onClick={() => revoke(s, "face")} disabled={busy !== null} className="text-red-600 hover:underline disabled:opacity-40">
+                        Remove face
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {staff.length === 0 && (
+              <div className="col-span-full text-gray-500">No staff yet. Add users from the dashboard.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

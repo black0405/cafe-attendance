@@ -21,6 +21,7 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at")
   records      AttendanceRecord[]
   credentials  WebauthnCredential[]
+  faces        FaceDescriptor[]
 
   @@map("users")
 }
@@ -37,6 +38,16 @@ model AttendanceRecord {
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("attendance")
+}
+
+model FaceDescriptor {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  descriptor Bytes
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("face_descriptors")
 }
 
 model Setting {

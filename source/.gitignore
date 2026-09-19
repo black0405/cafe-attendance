@@ -41,3 +41,6 @@ next-env.d.ts
 /installer/stage
 /installer/dist
 *.db
+
+# face-api model files, copied by scripts/copy-face-models.js
+/public/models
