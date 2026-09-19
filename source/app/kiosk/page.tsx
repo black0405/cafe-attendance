@@ -14,6 +14,8 @@ interface Staff {
   name: string;
   enrolled: boolean;
   clockedInAt: string | null;
+  onLunchSince: string | null;
+  lunchTaken: boolean;
 }
 
 type Banner = { kind: "ok" | "err"; text: string } | null;
@@ -79,7 +81,14 @@ export default function KioskPage() {
     }
   };
 
-  const punch = (s: Staff) =>
+  const WORDS: Record<string, string> = {
+    in: "clocked in",
+    out: "clocked out",
+    "lunch-start": "started lunch",
+    "lunch-end": "back from lunch",
+  };
+
+  const punch = (s: Staff, action: "punch" | "lunch" = "punch") =>
     run(
       s.id,
       async () => {
@@ -88,9 +97,9 @@ export default function KioskPage() {
         const data = await getJson("/api/kiosk/punch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, response }),
+          body: JSON.stringify({ token, response, action }),
         });
-        return `${s.name} clocked ${data.action} at ${fmtTime(data.timestamp)}`;
+        return `${s.name} ${WORDS[data.action] || data.action} at ${fmtTime(data.timestamp)}`;
       },
       "Fingerprint not recognised"
     );
@@ -177,7 +186,11 @@ export default function KioskPage() {
             <div
               key={s.id}
               className={`rounded-lg border p-4 flex flex-col gap-2 ${
-                s.clockedInAt ? "border-green-500 bg-green-50" : "bg-white"
+                s.onLunchSince
+                  ? "border-amber-500 bg-amber-50"
+                  : s.clockedInAt
+                  ? "border-green-500 bg-green-50"
+                  : "bg-white"
               }`}
             >
               <button
@@ -189,6 +202,8 @@ export default function KioskPage() {
                 <div className="text-sm text-gray-600">
                   {!s.enrolled
                     ? "Not enrolled"
+                    : s.onLunchSince
+                    ? `On lunch since ${fmtTime(s.onLunchSince)}`
                     : s.clockedInAt
                     ? `In since ${fmtTime(s.clockedInAt)}`
                     : "Out"}
@@ -199,6 +214,16 @@ export default function KioskPage() {
                   </div>
                 )}
               </button>
+
+              {s.enrolled && s.clockedInAt && !s.lunchTaken && (
+                <button
+                  onClick={() => punch(s, "lunch")}
+                  disabled={busy !== null || !supported}
+                  className="text-sm px-3 py-1 rounded border border-amber-400 text-amber-800 bg-white hover:bg-amber-100 disabled:opacity-40"
+                >
+                  {s.onLunchSince ? "Back from lunch" : "Lunch"}
+                </button>
+              )}
 
               {isAdmin && (
                 <div className="flex gap-2 text-xs mt-auto pt-2 border-t">

@@ -9,6 +9,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 ## Features
 
 - Fingerprint clock in/out using the laptop's built-in reader (Windows Hello via WebAuthn)
+- Lunch break per shift (start and end by fingerprint), deducted from hours worked
 - Kiosk screen that works without a login; admin controls only appear while an admin is signed in
 - Staff identified by phone number, email optional, login with either
 - Admin dashboard: staff list, attendance calendar, recent activity
@@ -43,6 +44,9 @@ Data lives in `%LOCALAPPDATA%\CafeAttendance\attendance.db`. Back it up by copyi
 5. **Log out.** The kiosk keeps working; Enroll and Revoke buttons disappear.
 
 Daily use: tap your name, touch the reader. Card turns green when clocked in.
+While clocked in a **Lunch** button appears: tap it and touch the reader to start
+lunch (card turns amber), tap **Back from lunch** to end it. One lunch per shift.
+If someone forgets to end lunch, clocking out ends it.
 
 Limits to know:
 
@@ -54,7 +58,7 @@ Limits to know:
 
 Dashboard, then **Reports**.
 
-- **Download:** this/last week, this/last month. CSV opens in Excel. One row per shift with clock in, clock out and hours, plus total hours per person.
+- **Download:** this/last week, this/last month. CSV opens in Excel. One row per shift with clock in, lunch start, lunch end, clock out and hours worked (lunch deducted), plus total hours per person.
 - **Weekly email:** tick "Send weekly report automatically", enter the email to send to and the SMTP details of the sending mailbox. For Gmail: host `smtp.gmail.com`, port `587`, username your Gmail address, password a Google App Password. "Send last week now" tests it.
 
 The email goes out every Monday after 08:00 for the previous Monday to Sunday, sent by the app on the laptop, so the laptop must be on with the app running at some point that week.

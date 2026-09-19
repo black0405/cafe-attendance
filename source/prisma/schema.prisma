@@ -31,6 +31,8 @@ model AttendanceRecord {
   user      User      @relation(fields: [userId], references: [id])
   clockIn   DateTime  @map("clock_in")
   clockOut  DateTime? @map("clock_out")
+  lunchStart DateTime? @map("lunch_start")
+  lunchEnd   DateTime? @map("lunch_end")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

@@ -15,7 +15,7 @@ export async function GET() {
       credentials: { select: { id: true } },
       records: {
         where: { clockOut: null },
-        select: { clockIn: true },
+        select: { clockIn: true, lunchStart: true, lunchEnd: true },
         take: 1,
       },
     },
@@ -27,6 +27,11 @@ export async function GET() {
       name: u.name || u.phone || `Staff #${u.id}`,
       enrolled: u.credentials.length > 0,
       clockedInAt: u.records[0]?.clockIn ?? null,
+      onLunchSince:
+        u.records[0]?.lunchStart && !u.records[0]?.lunchEnd
+          ? u.records[0].lunchStart
+          : null,
+      lunchTaken: Boolean(u.records[0]?.lunchEnd),
     }))
   );
 }

@@ -5,6 +5,7 @@ import {
 } from "@simplewebauthn/server";
 import { prisma } from "@/lib/prisma";
 import { rpID, origin, sealChallenge, openChallenge } from "@/lib/webauthn";
+import { applyPunch } from "@/lib/punch";
 
 // Step 1: employee taps their name; get a challenge bound to their credentials.
 export async function GET(request: Request) {
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
 // Step 2: fingerprint signed the challenge; verify and toggle clock in/out.
 export async function POST(request: Request) {
   try {
-    const { token, response } = await request.json();
+    const { token, response, action } = await request.json();
     const { challenge, userId } = await openChallenge(token);
 
     const cred = await prisma.webauthnCredential.findUnique({
@@ -70,24 +71,12 @@ export async function POST(request: Request) {
       data: { counter: authenticationInfo.newCounter },
     });
 
-    // Toggle: close the open shift (any day, so late nights work), else open one.
-    const open = await prisma.attendanceRecord.findFirst({
-      where: { userId, clockOut: null },
-      orderBy: { clockIn: "desc" },
-    });
-
     const now = new Date();
-    if (open) {
-      await prisma.attendanceRecord.update({
-        where: { id: open.id },
-        data: { clockOut: now },
-      });
-      return NextResponse.json({ action: "out", timestamp: now });
-    }
-    await prisma.attendanceRecord.create({ data: { userId, clockIn: now } });
-    return NextResponse.json({ action: "in", timestamp: now });
+    const result = await applyPunch(userId, action === "lunch" ? "lunch" : "punch", now);
+    return NextResponse.json({ action: result, timestamp: now });
   } catch (error) {
     console.error("Punch error:", error);
-    return NextResponse.json({ error: "Punch failed" }, { status: 400 });
+    const msg = error instanceof Error ? error.message : "Punch failed";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { prisma } from "./prisma";
+import { workedHours } from "./punch";
 
 // Settings live in the `settings` key/value table so the admin can edit them
 // from the UI without touching env vars on the cafe laptop.
@@ -54,7 +55,6 @@ export function rangeFor(kind: string, offset: number): Range {
 }
 
 const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-const hours = (a: Date, b: Date) => ((b.getTime() - a.getTime()) / 36e5).toFixed(2);
 
 export async function buildCsv({ from, to }: Range): Promise<string> {
   const records = await prisma.attendanceRecord.findMany({
@@ -63,20 +63,24 @@ export async function buildCsv({ from, to }: Range): Promise<string> {
     orderBy: [{ clockIn: "asc" }],
   });
 
-  const lines = ["Date,Name,Phone,Email,Clock In,Clock Out,Hours"];
+  const lines = ["Date,Name,Phone,Email,Clock In,Lunch Start,Lunch End,Clock Out,Hours"];
   const totals = new Map<string, number>();
   for (const r of records) {
     const who = r.user.name || r.user.phone || r.user.email || "";
-    const out = r.clockOut ? r.clockOut.toLocaleTimeString() : "(open)";
-    const h = r.clockOut ? hours(r.clockIn, r.clockOut) : "";
-    if (h) totals.set(who, (totals.get(who) || 0) + Number(h));
+    const t = (d: Date | null) => (d ? d.toLocaleTimeString() : "");
+    const out = r.clockOut ? t(r.clockOut) : "(open)";
+    const worked = workedHours(r);
+    const h = worked === null ? "" : worked.toFixed(2);
+    if (worked !== null) totals.set(who, (totals.get(who) || 0) + worked);
     lines.push(
       [
         r.clockIn.toLocaleDateString(),
         who,
         r.user.phone,
         r.user.email,
-        r.clockIn.toLocaleTimeString(),
+        t(r.clockIn),
+        t(r.lunchStart),
+        t(r.lunchEnd),
         out,
         h,
       ]
