@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 import { workedHours } from "./punch";
 
@@ -54,43 +55,75 @@ export function rangeFor(kind: string, offset: number): Range {
   return kind === "month" ? monthRange(offset) : weekRange(offset);
 }
 
-const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+// exceljs writes JS Dates as UTC; shift by the local offset so Excel shows local time.
+const xl = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
 
-export async function buildCsv({ from, to }: Range): Promise<string> {
+export async function buildWorkbook(range: Range): Promise<Buffer> {
+  const { from, to } = range;
   const records = await prisma.attendanceRecord.findMany({
     where: { clockIn: { gte: from, lt: to } },
     include: { user: { select: { name: true, phone: true, email: true } } },
     orderBy: [{ clockIn: "asc" }],
   });
 
-  const lines = ["Date,Name,Phone,Email,Clock In,Lunch Start,Lunch End,Clock Out,Hours"];
-  const totals = new Map<string, number>();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Cafe Attendance";
+
+  const shifts = wb.addWorksheet("Shifts", { views: [{ state: "frozen", ySplit: 1 }] });
+  shifts.columns = [
+    { header: "Date", key: "date", width: 12, style: { numFmt: "yyyy-mm-dd" } },
+    { header: "Name", key: "name", width: 22 },
+    { header: "Phone", key: "phone", width: 16 },
+    { header: "Email", key: "email", width: 26 },
+    { header: "Clock In", key: "in", width: 10, style: { numFmt: "hh:mm" } },
+    { header: "Lunch Start", key: "ls", width: 12, style: { numFmt: "hh:mm" } },
+    { header: "Lunch End", key: "le", width: 12, style: { numFmt: "hh:mm" } },
+    { header: "Clock Out", key: "out", width: 10, style: { numFmt: "hh:mm" } },
+    { header: "Hours", key: "hours", width: 8, style: { numFmt: "0.00" } },
+  ];
+
+  const totals = new Map<string, { shifts: number; hours: number }>();
   for (const r of records) {
     const who = r.user.name || r.user.phone || r.user.email || "";
-    const t = (d: Date | null) => (d ? d.toLocaleTimeString() : "");
-    const out = r.clockOut ? t(r.clockOut) : "(open)";
     const worked = workedHours(r);
-    const h = worked === null ? "" : worked.toFixed(2);
-    if (worked !== null) totals.set(who, (totals.get(who) || 0) + worked);
-    lines.push(
-      [
-        r.clockIn.toLocaleDateString(),
-        who,
-        r.user.phone,
-        r.user.email,
-        t(r.clockIn),
-        t(r.lunchStart),
-        t(r.lunchEnd),
-        out,
-        h,
-      ]
-        .map(q)
-        .join(",")
-    );
+    const t = totals.get(who) || { shifts: 0, hours: 0 };
+    t.shifts += 1;
+    if (worked !== null) t.hours += worked;
+    totals.set(who, t);
+    shifts.addRow({
+      date: xl(r.clockIn),
+      name: who,
+      phone: r.user.phone || "",
+      email: r.user.email || "",
+      in: xl(r.clockIn),
+      ls: r.lunchStart ? xl(r.lunchStart) : "",
+      le: r.lunchEnd ? xl(r.lunchEnd) : "",
+      out: r.clockOut ? xl(r.clockOut) : "(open)",
+      hours: worked === null ? "" : Number(worked.toFixed(2)),
+    });
   }
-  lines.push("", "Totals", "Name,Hours");
-  for (const [who, h] of Array.from(totals.entries()).sort()) lines.push(`${q(who)},${h.toFixed(2)}`);
-  return lines.join("\r\n");
+  shifts.getRow(1).font = { bold: true };
+  shifts.autoFilter = { from: "A1", to: "I1" };
+
+  const sum = wb.addWorksheet("Totals", { views: [{ state: "frozen", ySplit: 1 }] });
+  sum.columns = [
+    { header: "Name", key: "name", width: 22 },
+    { header: "Shifts", key: "shifts", width: 8 },
+    { header: "Hours", key: "hours", width: 10, style: { numFmt: "0.00" } },
+  ];
+  for (const [name, t] of Array.from(totals.entries()).sort()) {
+    sum.addRow({ name, shifts: t.shifts, hours: Number(t.hours.toFixed(2)) });
+  }
+  sum.getRow(1).font = { bold: true };
+  const last = sum.rowCount + 1;
+  sum.getCell(`A${last}`).value = "Total";
+  sum.getCell(`A${last}`).font = { bold: true };
+  sum.getCell(`B${last}`).value = { formula: `SUM(B2:B${last - 1})` };
+  sum.getCell(`C${last}`).value = { formula: `SUM(C2:C${last - 1})` };
+  sum.getCell(`C${last}`).numFmt = "0.00";
+  sum.getCell(`C${last}`).font = { bold: true };
+
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 export async function sendReport(range: Range) {
@@ -104,13 +137,13 @@ export async function sendReport(range: Range) {
     secure: Number(s.smtp_port) === 465,
     auth: { user: s.smtp_user, pass: s.smtp_pass },
   });
-  const csv = await buildCsv(range);
+  const xlsx = await buildWorkbook(range);
   await transport.sendMail({
     from: s.smtp_user,
     to: s.report_to,
     subject: `Attendance report ${range.label}`,
     text: `Attendance for ${iso(range.from)} to ${iso(new Date(range.to.getTime() - 1))} attached.`,
-    attachments: [{ filename: `attendance-${range.label}.csv`, content: csv }],
+    attachments: [{ filename: `attendance-${range.label}.xlsx`, content: xlsx }],
   });
 }
 

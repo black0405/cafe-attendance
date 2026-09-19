@@ -45,7 +45,7 @@ export default function ReportsPage() {
     if (!res.ok) return toast.error("Download failed");
     const name =
       res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] ||
-      "attendance.csv";
+      "attendance.xlsx";
     const url = URL.createObjectURL(await res.blob());
     const a = Object.assign(document.createElement("a"), { href: url, download: name });
     a.click();
@@ -100,7 +100,7 @@ export default function ReportsPage() {
           <Download className="h-6 w-6" /> Download report
         </h1>
         <p className="text-sm text-gray-600 mb-3">
-          CSV file, opens in Excel. One row per shift plus total hours per person.
+          Excel file. Sheet 1: one row per shift. Sheet 2: shifts and total hours per person.
         </p>
         <div className="flex flex-wrap gap-2">
           {DOWNLOADS.map((d) => (
@@ -120,7 +120,7 @@ export default function ReportsPage() {
           <Mail className="h-6 w-6" /> Weekly email
         </h2>
         <p className="text-sm text-gray-600 mb-3">
-          Every Monday after 8:00 the previous week&apos;s CSV is emailed, as long
+          Every Monday after 8:00 the previous week&apos;s Excel file is emailed, as long
           as the app is running on the laptop. For Gmail use smtp.gmail.com, port
           587, and an App Password (not your normal password).
         </p>

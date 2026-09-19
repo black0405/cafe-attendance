@@ -13,7 +13,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 - Kiosk screen that works without a login; admin controls only appear while an admin is signed in
 - Staff identified by phone number, email optional, login with either
 - Admin dashboard: staff list, attendance calendar, recent activity
-- Weekly and monthly CSV reports, plus an automatic weekly email
+- Weekly and monthly Excel reports, plus an automatic weekly email
 - One-click Windows installer, runs hidden in the background, data kept across upgrades
 - Passwords stored bcrypt-hashed, server listens on the laptop only (127.0.0.1)
 
@@ -58,7 +58,7 @@ Limits to know:
 
 Dashboard, then **Reports**.
 
-- **Download:** this/last week, this/last month. CSV opens in Excel. One row per shift with clock in, lunch start, lunch end, clock out and hours worked (lunch deducted), plus total hours per person.
+- **Download:** this/last week, this/last month as an Excel file. Sheet "Shifts": one row per shift with clock in, lunch start, lunch end, clock out and hours worked (lunch deducted). Sheet "Totals": shifts and hours per person with a grand total.
 - **Weekly email:** tick "Send weekly report automatically", enter the email to send to and the SMTP details of the sending mailbox. For Gmail: host `smtp.gmail.com`, port `587`, username your Gmail address, password a Google App Password. "Send last week now" tests it.
 
 The email goes out every Monday after 08:00 for the previous Monday to Sunday, sent by the app on the laptop, so the laptop must be on with the app running at some point that week.
