@@ -23,6 +23,7 @@ Source: "stage\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs igno
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"
 Name: "{group}\Stop {#AppName}"; Filename: "{app}\stop.cmd"; WorkingDir: "{app}"; Flags: runminimized
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: desktopicon
 Name: "{userstartup}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: autostart
 
@@ -45,4 +46,18 @@ begin
   if FileExists(ExpandConstant('{app}\stop.cmd')) then
     Exec(ExpandConstant('{app}\stop.cmd'), '', '', SW_HIDE, ewWaitUntilTerminated, rc);
   Result := '';
+end;
+
+// After uninstall, offer to remove the attendance data (DB, secret, logs).
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  data: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    data := ExpandConstant('{localappdata}\CafeAttendance');
+    if DirExists(data) and (not UninstallSilent) then
+      if MsgBox('Also delete the attendance database and settings in' + #13#10 + data + '?' + #13#10#13#10 + 'Choose No to keep them for a future reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        DelTree(data, True, True, True);
+  end;
 end;

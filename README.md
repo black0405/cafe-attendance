@@ -33,6 +33,7 @@ Password: admin@admin.com
 Change it right away: Dashboard, then Users, then the pencil icon on the Admin User row.
 
 The server runs hidden. Use **Stop Cafe Attendance** in the Start Menu to stop it.
+**Uninstall Cafe Attendance** is in the Start Menu too (also under Settings, Apps). It asks whether to delete the attendance data.
 Data lives in `%LOCALAPPDATA%\CafeAttendance\attendance.db`. Back it up by copying that file. Logs are next to it.
 
 ## Fingerprint setup
