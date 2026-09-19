@@ -7,7 +7,7 @@ import {
   startRegistration,
   browserSupportsWebAuthn,
 } from "@simplewebauthn/browser";
-import { Fingerprint, Camera } from "lucide-react";
+import { Camera } from "lucide-react";
 
 interface Staff {
   id: number;
@@ -280,8 +280,10 @@ export default function KioskPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Fingerprint className="h-8 w-8" /> Clock In / Out
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="" className="h-10 w-10 rounded-lg" />
+            Clock In / Out
           </h1>
           <div className="text-sm text-gray-500 flex items-center gap-4">
             <span>Look at the camera or tap your name, then touch the fingerprint reader</span>

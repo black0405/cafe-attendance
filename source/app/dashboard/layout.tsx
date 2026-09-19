@@ -42,9 +42,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="flex-shrink-0 flex items-center">
                   <Link
                     href="/dashboard"
-                    className="text-xl font-bold text-gray-800"
+                    className="text-xl font-bold text-gray-800 flex items-center gap-2"
                   >
-                    Attendance System
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/logo.png" alt="" className="h-8 w-8 rounded-md" />
+                    Cafe Attendance
                   </Link>
                 </div>
                 <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
@@ -94,7 +96,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Footer */}
       <footer className="border-t bg-white">
         <div className="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Attendance System. All rights reserved.
+          © {new Date().getFullYear()} Cafe Attendance.
         </div>
       </footer>
     </>

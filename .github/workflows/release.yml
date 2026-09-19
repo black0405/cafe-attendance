@@ -1,0 +1,55 @@
+# Builds CafeAttendance-Setup.exe on a GitHub Windows runner and publishes it as
+# a release. Start it from the GitHub website: Actions, "Build installer",
+# "Run workflow", type a version like 1.1.0. No local tools needed.
+name: Build installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number for this release (e.g. 1.1.0)"
+        required: true
+        default: "1.0.1"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stamp version into installer
+        shell: pwsh
+        run: |
+          (Get-Content installer/setup.iss) -replace '#define AppVersion ".*"', '#define AppVersion "${{ inputs.version }}"' | Set-Content installer/setup.iss
+
+      - name: Build installer
+        shell: cmd
+        run: installer\build-installer.cmd
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ inputs.version }}" "installer/dist/CafeAttendance-Setup.exe" `
+            --title "v${{ inputs.version }}" `
+            --generate-notes `
+            --target "${{ github.sha }}"

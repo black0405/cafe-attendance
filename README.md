@@ -1,8 +1,11 @@
+<p align="center"><img src="source/public/logo.png" width="128" alt="Cafe Attendance logo"></p>
+
 # Cafe Attendance
 
-Staff attendance for a small cafe, running on one Windows laptop. Staff tap
-their name on a kiosk screen and touch the laptop's fingerprint reader to clock
-in or out. The owner manages staff, downloads reports and gets a weekly email.
+Staff attendance for a small cafe, running on one Windows laptop. Staff look
+at the webcam, the kiosk greets them by name, they touch the fingerprint reader
+to clock in or out. The owner manages staff, downloads Excel reports and gets a
+weekly email.
 
 No cloud, no Docker, no server to rent. One installer, one SQLite file.
 
@@ -66,9 +69,14 @@ Dashboard, then **Reports**.
 
 The email goes out every Monday after 08:00 for the previous Monday to Sunday, sent by the app on the laptop, so the laptop must be on with the app running at some point that week.
 
-## Build the installer
+## Release a new version (no tools needed)
 
-Needs Node 20+ and [Inno Setup 6](https://jrsoftware.org/isinfo.php).
+On GitHub: **Actions**, **Build installer**, **Run workflow**, type a version
+such as `1.1.0`, click the green button. About ten minutes later the new
+`CafeAttendance-Setup.exe` appears under **Releases**. Installing it over an
+older version keeps all data.
+
+To build locally instead, with Node 20+ and [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```bash
 cd source
@@ -106,5 +114,4 @@ Next.js 13, Prisma, SQLite, SimpleWebAuthn, face-api.js (TensorFlow.js), nodemai
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Started from
-[rakshitbharat/very-simple-attendance](https://github.com/rakshitbharat/very-simple-attendance) (MIT).
+MIT, see [LICENSE](LICENSE). Attributions for code this project builds on are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

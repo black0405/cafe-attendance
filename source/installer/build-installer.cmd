@@ -20,7 +20,7 @@ if exist public xcopy /e /i /q public "%OUT%\app\public" >nul
 xcopy /e /i /q prisma\migrations "%OUT%\app\migrations" >nul || exit /b 1
 copy /y scripts\migrate.js "%OUT%\app\migrate.js" >nul || exit /b 1
 for /f "delims=" %%n in ('node -p process.execPath') do copy /y "%%n" "%OUT%\node.exe" >nul
-for %%f in (start.cmd stop.cmd launch.vbs) do copy /y "installer\%%f" "%OUT%\%%f" >nul
+for %%f in (start.cmd stop.cmd launch.vbs icon.ico) do copy /y "installer\%%f" "%OUT%\%%f" >nul
 
 echo [3/5] check: query engine present?
 dir /s /b "%OUT%\app\node_modules\.prisma\client\*.node" >nul || (echo Prisma query engine missing from standalone output & exit /b 1)

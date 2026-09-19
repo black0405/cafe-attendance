@@ -16,16 +16,19 @@ Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
 UninstallDisplayName={#AppName}
+SetupIconFile=icon.ico
+UninstallDisplayIcon={app}\icon.ico
+WizardStyle=modern
 
 [Files]
 Source: "stage\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"
-Name: "{group}\Stop {#AppName}"; Filename: "{app}\stop.cmd"; WorkingDir: "{app}"; Flags: runminimized
+Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+Name: "{group}\Stop {#AppName}"; Filename: "{app}\stop.cmd"; WorkingDir: "{app}"; Flags: runminimized; IconFilename: "{app}\icon.ico"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: autostart
+Name: "{autodesktop}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\icon.ico"
+Name: "{userstartup}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; Tasks: autostart; IconFilename: "{app}\icon.ico"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"

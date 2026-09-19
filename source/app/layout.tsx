@@ -7,8 +7,8 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Attendance System",
-  description: "Simple attendance tracking system",
+  title: "Cafe Attendance",
+  description: "Staff attendance with fingerprint and face recognition on one laptop",
 };
 
 export default function RootLayout({
