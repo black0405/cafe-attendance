@@ -24,7 +24,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 
 1. Download `CafeAttendance-Setup.exe` from the Releases page.
 2. Run it, Next, Finish. A **Cafe Attendance** shortcut appears on the desktop and Start Menu. Tick "Start when Windows starts" for a kiosk.
-3. The kiosk opens in an Edge window at `http://localhost:3000/kiosk`.
+3. The kiosk opens in an Edge window at `http://localhost:3789/kiosk`.
 
 Default admin login:
 
@@ -105,8 +105,8 @@ Set in `source/installer/start.cmd` for installed copies, or `.env` in developme
 |----------|---------|---------|
 | `DATABASE_URL` | `file:%LOCALAPPDATA%/CafeAttendance/attendance.db` | SQLite file |
 | `JWT_SECRET` | generated once into `jwt.secret` | token signing |
-| `PORT` / `HOSTNAME` | `3000` / `127.0.0.1` | where the server listens |
-| `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | `localhost` / `http://localhost:3000` | fingerprint domain binding |
+| `PORT` / `HOSTNAME` | `3789` / `127.0.0.1` | where the server listens |
+| `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | `localhost` / `http://localhost:3789` | fingerprint domain binding |
 
 ## Stack
 
