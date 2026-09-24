@@ -29,7 +29,7 @@ rem Already running? Just open the window. Match our health body, not just any
 rem HTTP answer, so another app on the port is not mistaken for ours.
 curl -s http://127.0.0.1:%PORT%/api/health | findstr /c:"\"database\":\"connected\"" >nul && goto open
 
-rem Create / upgrade the database schema, seed admin on first run.
+rem Create / upgrade the database schema.
 "%APP%node.exe" "%APP%app\migrate.js" >> "%DATA%\server.log" 2>&1 || exit /b 1
 
 rem Hidden window; env vars above are inherited. Output goes to the logs.

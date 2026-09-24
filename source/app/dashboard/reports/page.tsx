@@ -107,7 +107,7 @@ export default function ReportsPage() {
             <button
               key={d.label}
               onClick={() => download(d.range, d.offset)}
-              className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+              className="px-4 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700"
             >
               {d.label}
             </button>

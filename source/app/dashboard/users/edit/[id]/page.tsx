@@ -86,7 +86,7 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
         <h1 className="text-2xl font-bold mb-4">User not found</h1>
         <button
           onClick={() => router.push("/dashboard/users")}
-          className="text-blue-500 hover:underline"
+          className="text-emerald-500 hover:underline"
         >
           Back to Users
         </button>

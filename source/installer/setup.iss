@@ -1,6 +1,10 @@
 ; Inno Setup script for Cafe Attendance. Built by build-installer.cmd.
 #define AppName "Cafe Attendance"
 #define AppVersion "1.0.0"
+; Staged app folder; build-installer.cmd passes /DStage=<path outside the source tree>.
+#ifndef Stage
+  #define Stage "stage"
+#endif
 
 [Setup]
 AppId={{7E3C1C0A-5B7D-4A6F-9E2B-2F1A6D8C4B10}
@@ -21,7 +25,7 @@ UninstallDisplayIcon={app}\icon.ico
 WizardStyle=modern
 
 [Files]
-Source: "stage\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#Stage}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"

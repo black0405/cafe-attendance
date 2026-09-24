@@ -18,6 +18,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 - Admin dashboard: staff list, attendance calendar, recent activity
 - Weekly and monthly Excel reports, plus an automatic weekly email
 - One-click Windows installer, runs hidden in the background, data kept across upgrades
+- No default login: the admin account is created on first launch
 - Passwords stored bcrypt-hashed, server listens on the laptop only (127.0.0.1)
 
 ## Install (cafe laptop)
@@ -26,14 +27,7 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 2. Run it, Next, Finish. A **Cafe Attendance** shortcut appears on the desktop and Start Menu. Tick "Start when Windows starts" for a kiosk.
 3. The kiosk opens in an Edge window at `http://localhost:3789/kiosk`.
 
-Default admin login:
-
-```
-Email:    admin@admin.com
-Password: admin@admin.com
-```
-
-Change it right away: Dashboard, then Users, then the pencil icon on the Admin User row.
+On first launch the app opens a **Welcome** screen: enter a name, email and password (8+ characters) to create the admin account. There is no default login. The screen only appears while no accounts exist.
 
 The server runs hidden. Use **Stop Cafe Attendance** in the Start Menu to stop it.
 **Uninstall Cafe Attendance** is in the Start Menu too (also under Settings, Apps). It asks whether to delete the attendance data.
@@ -85,6 +79,11 @@ npm run build:installer
 # -> source/installer/dist/CafeAttendance-Setup.exe
 ```
 
+The build stages the app in `%TEMP%\CafeAttendance-stage`, outside the source
+tree, and runs the database migration from there as a smoke test. A module
+missing from the install then fails the build instead of failing on the cafe
+laptop.
+
 ## Develop
 
 ```bash
@@ -114,4 +113,4 @@ Next.js 13, Prisma, SQLite, SimpleWebAuthn, face-api.js (TensorFlow.js), nodemai
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Attributions for code this project builds on are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT, see [LICENSE](LICENSE).

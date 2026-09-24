@@ -76,7 +76,7 @@ export function RecentActivity({ userId }: RecentActivityProps) {
           {records.map((record) => (
             <div
               key={record.id}
-              className="bg-white p-4 rounded-md shadow border-l-4 border-blue-500"
+              className="bg-white p-4 rounded-md shadow border-l-4 border-emerald-500"
             >
               <div className="flex justify-between items-start">
                 <div>
@@ -89,7 +89,7 @@ export function RecentActivity({ userId }: RecentActivityProps) {
                     </div>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-blue-600">
+                <div className="text-sm font-semibold text-emerald-600">
                   {calculateDuration(record.clock_in, record.clock_out)}
                 </div>
               </div>

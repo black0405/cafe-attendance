@@ -19,9 +19,11 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { useRouter } from "next/navigation";
 import RecentActivity from "@/app/components/RecentActivity";
+import { CafeHero } from "@/components/CafeArt";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { toast } from "react-hot-toast";
@@ -34,7 +36,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 interface User {
@@ -322,8 +325,11 @@ export default function DashboardPage() {
         {
           label: "Daily Check-ins",
           data: stats?.attendanceTrends.map((trend) => trend.count) || [],
-          borderColor: "rgb(75, 192, 192)",
-          tension: 0.1,
+          borderColor: "#16a34a",
+          backgroundColor: "rgba(34, 197, 94, 0.15)",
+          pointBackgroundColor: "#15803d",
+          fill: true,
+          tension: 0.3,
         },
       ],
     };
@@ -334,7 +340,7 @@ export default function DashboardPage() {
           <StatCard
             title="Active Users"
             value={stats?.activeUsers || 0}
-            icon={<FiUser className="w-8 h-8 text-blue-500" />}
+            icon={<FiUser className="w-8 h-8 text-emerald-500" />}
           />
           <StatCard
             title="Total Check-ins"
@@ -344,7 +350,7 @@ export default function DashboardPage() {
           <StatCard
             title="This Week"
             value={stats?.weeklyCheckIns || 0}
-            icon={<FiCalendar className="w-8 h-8 text-purple-500" />}
+            icon={<FiCalendar className="w-8 h-8 text-amber-500" />}
           />
           <StatCard
             title="Active Sessions"
@@ -471,7 +477,7 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Today's Hours</p>
@@ -479,13 +485,13 @@ export default function DashboardPage() {
                   {clockedIn ? "Active" : "0h 0m"}
                 </p>
               </div>
-              <div className="bg-blue-50 p-3 rounded-full">
-                <FiClock className="w-6 h-6 text-blue-500" />
+              <div className="bg-emerald-50 p-3 rounded-full">
+                <FiClock className="w-6 h-6 text-emerald-500" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Weekly Hours</p>
@@ -499,7 +505,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Monthly Attendance</p>
@@ -507,13 +513,13 @@ export default function DashboardPage() {
                   {userStats.monthlyAttendance}%
                 </p>
               </div>
-              <div className="bg-purple-50 p-3 rounded-full">
-                <FiCheckCircle className="w-6 h-6 text-purple-500" />
+              <div className="bg-amber-50 p-3 rounded-full">
+                <FiCheckCircle className="w-6 h-6 text-amber-500" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Attendance Streak</p>
@@ -536,7 +542,7 @@ export default function DashboardPage() {
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <FiCalendar className="text-blue-500" />
+              <FiCalendar className="text-emerald-500" />
               Monthly Overview
             </h2>
             <div className="calendar-container h-full">
@@ -578,9 +584,17 @@ export default function DashboardPage() {
 
   return (
     <main className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">
-        Welcome, {currentUser.name || currentUser.email}
-      </h1>
+      <section className="mb-6 rounded-2xl bg-gradient-to-r from-green-700 via-green-800 to-[#3f2415] text-white shadow-lg px-6 py-4 flex items-center justify-between gap-4 overflow-hidden">
+        <div>
+          <h1 className="text-2xl font-bold">
+            Welcome, {currentUser.name || currentUser.email}
+          </h1>
+          <p className="text-green-50/80 text-sm mt-1">
+            {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+        </div>
+        <CafeHero className="hidden sm:block h-28 w-auto -my-2" />
+      </section>
       {currentUser.is_admin ? <AdminDashboard /> : <UserDashboard />}
     </main>
   );
@@ -588,7 +602,7 @@ export default function DashboardPage() {
 
 // Utility Components
 const StatCard = ({ title, value, icon }: StatCardProps) => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
     <div className="flex items-center justify-between">
       <div>
         <p className="text-gray-500">{title}</p>

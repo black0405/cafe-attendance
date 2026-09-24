@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Users, Clock, Fingerprint, FileText } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -21,6 +21,13 @@ interface User {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const tab = (href: string) =>
+    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+      pathname === href
+        ? "border-primary text-primary"
+        : "border-transparent text-gray-500 hover:border-green-300 hover:text-gray-800"
+    }`;
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -34,8 +41,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm border-b">
+      <div className="min-h-screen bg-gradient-to-b from-green-50/60 to-background">
+        <nav className="bg-white shadow-sm border-t-4 border-t-primary border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
               <div className="flex">
@@ -52,14 +59,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                   <Link
                     href="/dashboard"
-                    className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    className={tab("/dashboard")}
                   >
                     <Clock className="mr-2 h-4 w-4" />
                     Dashboard
                   </Link>
                   <Link
                     href="/kiosk"
-                    className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    className={tab("/kiosk")}
                   >
                     <Fingerprint className="mr-2 h-4 w-4" />
                     Kiosk
@@ -67,7 +74,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {user?.is_admin && (
                     <Link
                       href="/dashboard/users"
-                      className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                      className={tab("/dashboard/users")}
                     >
                       <Users className="mr-2 h-4 w-4" />
                       Users
@@ -76,7 +83,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {user?.is_admin && (
                     <Link
                       href="/dashboard/reports"
-                      className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                      className={tab("/dashboard/reports")}
                     >
                       <FileText className="mr-2 h-4 w-4" />
                       Reports

@@ -1,11 +1,10 @@
 // Applies any unapplied prisma/migrations/*/migration.sql to the SQLite DB in
-// DATABASE_URL, then seeds the default admin if the users table is empty.
+// DATABASE_URL. No users are seeded: the first admin is created on /setup.
 // Runs at every app start (installer/start.cmd) and during the installer build.
 // ponytail: hand-rolled applier because the Prisma CLI is not shipped to the cafe laptop.
 const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 const dir = [
@@ -45,20 +44,6 @@ async function main() {
       ),
     ]);
     console.log("migration applied:", name);
-  }
-
-  if ((await prisma.user.count()) === 0) {
-    await prisma.user.create({
-      data: {
-        email: "admin@admin.com",
-        name: "Admin User",
-        password: bcrypt.hashSync("admin@admin.com", 10),
-        is_admin: true,
-        ptp: "1234",
-        ptp_verified: true,
-      },
-    });
-    console.log("default admin created");
   }
 }
 

@@ -7,7 +7,8 @@ import {
   startRegistration,
   browserSupportsWebAuthn,
 } from "@simplewebauthn/browser";
-import { Camera } from "lucide-react";
+import { Camera, Clock } from "lucide-react";
+import { CafeHero, patternBg } from "@/components/CafeArt";
 
 interface Staff {
   id: number;
@@ -41,6 +42,9 @@ async function getJson(url: string, init?: RequestInit) {
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
+
+const initials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
 
 const fmtTime = (d: string | Date) =>
   new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -82,7 +86,16 @@ export default function KioskPage() {
       .then(setStaff)
       .catch(() => setBanner({ kind: "err", text: "Could not load staff" }));
 
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    getJson("/api/setup")
+      .then((d) => d.needsSetup && location.replace("/setup"))
+      .catch(() => {});
     setIsAdmin(Object.keys(adminHeaders()).length > 0);
     setSupported(browserSupportsWebAuthn());
     load();
@@ -277,21 +290,37 @@ export default function KioskPage() {
   }[camState];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background" style={patternBg}>
       <div className="max-w-6xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold flex items-center gap-3">
+        <header className="mb-6 rounded-2xl bg-gradient-to-r from-green-700 via-green-800 to-[#3f2415] text-white shadow-lg px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" className="h-10 w-10 rounded-lg" />
-            Clock In / Out
-          </h1>
-          <div className="text-sm text-gray-500 flex items-center gap-4">
-            <span>Look at the camera or tap your name, then touch the fingerprint reader</span>
-            <Link href={isAdmin ? "/dashboard" : "/"} className="underline">
+            <img src="/logo.png" alt="" className="h-14 w-14 rounded-xl shadow ring-2 ring-white/30" />
+            <div>
+              <h1 className="text-3xl font-bold">Clock In / Out</h1>
+              <p className="text-sm text-green-50/80">
+                Look at the camera or tap your name, then touch the fingerprint reader
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="text-right">
+              <div className="text-3xl font-semibold tabular-nums flex items-center gap-2">
+                <Clock className="h-6 w-6 text-green-300" />
+                {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </div>
+              <div className="text-xs text-green-50/80">
+                {now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+              </div>
+            </div>
+            <Link
+              href={isAdmin ? "/dashboard" : "/"}
+              className="rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium transition-colors"
+            >
               {isAdmin ? "Dashboard" : "Admin login"}
             </Link>
           </div>
-        </div>
+        </header>
 
         {!supported && (
           <div className="mb-4 p-3 rounded bg-red-100 text-red-800">
@@ -319,15 +348,15 @@ export default function KioskPage() {
         <div className="grid md:grid-cols-[320px_1fr] gap-6">
           {/* Camera panel */}
           <div className="space-y-3">
-            <div className="relative rounded-lg overflow-hidden bg-black aspect-[4/3]">
+            <div className="relative rounded-2xl overflow-hidden bg-[#2a170d] aspect-[4/3] shadow-md ring-4 ring-white">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
-              <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-sm px-3 py-2 flex items-center gap-2">
+              <div className="absolute bottom-0 inset-x-0 bg-green-900/80 text-white text-sm px-3 py-2 flex items-center gap-2">
                 <Camera className="h-4 w-4" /> {camText}
               </div>
             </div>
 
             {recognised && (
-              <div className="rounded-lg border-2 border-blue-500 bg-blue-50 p-4 space-y-3">
+              <div className="rounded-2xl border-2 border-emerald-500 bg-white shadow-md p-4 space-y-3">
                 <div className="text-lg font-semibold">Hi {recognised.name}</div>
                 <div className="text-sm text-gray-700">
                   {recognised.onLunchSince
@@ -369,37 +398,56 @@ export default function KioskPage() {
           </div>
 
           {/* Staff grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 content-start">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 self-start">
             {staff.map((s) => (
               <div
                 key={s.id}
-                className={`rounded-lg border p-4 flex flex-col gap-2 ${
+                className={`rounded-2xl border bg-white p-4 flex flex-col gap-2 shadow-sm transition-shadow hover:shadow-md ${
                   recognised?.id === s.id
-                    ? "border-blue-500 ring-2 ring-blue-300"
+                    ? "border-emerald-500 ring-2 ring-emerald-300"
                     : s.onLunchSince
-                    ? "border-amber-500 bg-amber-50"
+                    ? "border-amber-400 border-l-4"
                     : s.clockedInAt
-                    ? "border-green-500 bg-green-50"
-                    : "bg-white"
+                    ? "border-green-500 border-l-4"
+                    : ""
                 }`}
               >
                 <button
                   onClick={() => punch(s)}
                   disabled={busy !== null || !s.enrolled || !supported}
-                  className="text-left disabled:opacity-40"
+                  className="text-left disabled:opacity-40 flex items-center gap-3 min-w-0"
                 >
-                  <div className="text-lg font-semibold truncate">{s.name}</div>
-                  <div className="text-sm text-gray-600">
-                    {!s.enrolled
-                      ? "No fingerprint"
-                      : s.onLunchSince
-                      ? `On lunch since ${fmtTime(s.onLunchSince)}`
-                      : s.clockedInAt
-                      ? `In since ${fmtTime(s.clockedInAt)}`
-                      : "Out"}
-                  </div>
-                  {busy === s.id && <div className="text-sm text-blue-600 mt-1">Touch the reader…</div>}
+                  <span
+                    aria-hidden
+                    className={`grid place-items-center h-12 w-12 shrink-0 rounded-full text-lg font-bold ${
+                      s.onLunchSince
+                        ? "bg-amber-100 text-amber-800"
+                        : s.clockedInAt
+                        ? "bg-green-600 text-white"
+                        : "bg-[#f3e8dc] text-[#7a4420]"
+                    }`}
+                  >
+                    {initials(s.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-lg font-semibold truncate">{s.name}</span>
+                    <span className="text-sm text-gray-600 flex items-center gap-1.5">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          !s.enrolled ? "bg-gray-300" : s.onLunchSince ? "bg-amber-500" : s.clockedInAt ? "bg-green-500" : "bg-gray-400"
+                        }`}
+                      />
+                      {!s.enrolled
+                        ? "No fingerprint"
+                        : s.onLunchSince
+                        ? `On lunch since ${fmtTime(s.onLunchSince)}`
+                        : s.clockedInAt
+                        ? `In since ${fmtTime(s.clockedInAt)}`
+                        : "Out"}
+                    </span>
+                  </span>
                 </button>
+                {busy === s.id && <div className="text-sm text-emerald-600">Touch the reader…</div>}
 
                 {s.enrolled && s.clockedInAt && !s.lunchTaken && (
                   <button
@@ -413,7 +461,7 @@ export default function KioskPage() {
 
                 {isAdmin && (
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-auto pt-2 border-t">
-                    <button onClick={() => enroll(s)} disabled={busy !== null || !supported} className="text-blue-600 hover:underline disabled:opacity-40">
+                    <button onClick={() => enroll(s)} disabled={busy !== null || !supported} className="text-emerald-600 hover:underline disabled:opacity-40">
                       {s.enrolled ? "Add finger" : "Enroll finger"}
                     </button>
                     {s.enrolled && (
@@ -421,7 +469,7 @@ export default function KioskPage() {
                         Remove finger
                       </button>
                     )}
-                    <button onClick={() => enrollFace(s)} disabled={busy !== null || camState !== "ready"} className="text-blue-600 hover:underline disabled:opacity-40">
+                    <button onClick={() => enrollFace(s)} disabled={busy !== null || camState !== "ready"} className="text-emerald-600 hover:underline disabled:opacity-40">
                       {s.faceEnrolled ? "Add face sample" : "Enroll face"}
                     </button>
                     {s.faceEnrolled && (
@@ -434,7 +482,11 @@ export default function KioskPage() {
               </div>
             ))}
             {staff.length === 0 && (
-              <div className="col-span-full text-gray-500">No staff yet. Add users from the dashboard.</div>
+              <div className="col-span-full rounded-2xl bg-white/70 border border-dashed border-green-300 p-8 flex flex-col items-center text-center gap-3">
+                <CafeHero className="w-64 max-w-full" />
+                <div className="text-lg font-semibold">No staff yet</div>
+                <div className="text-gray-500">Add staff from the dashboard, then enrol their fingerprint and face here.</div>
+              </div>
             )}
           </div>
         </div>

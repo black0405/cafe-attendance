@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AuthShell } from "@/components/AuthShell";
 import {
   Card,
   CardHeader,
@@ -84,6 +85,11 @@ export default function LoginPage() {
       browserInfo: navigator.userAgent,
     });
     setDeviceInfo(generateDeviceInfo());
+
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => d.needsSetup && router.replace("/setup"))
+      .catch(() => {});
 
     // Check for existing session
     const checkSession = async () => {
@@ -374,8 +380,8 @@ export default function LoginPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Card className="w-full max-w-md mx-4">
+    <AuthShell>
+      <Card className="shadow-xl border-green-100">
         {loginStep === "credentials" ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -523,7 +529,7 @@ export default function LoginPage() {
           >
             <CardHeader className="space-y-1">
               <div className="flex items-center justify-center mb-2">
-                <Shield className="h-10 w-10 text-blue-500" />
+                <Shield className="h-10 w-10 text-emerald-500" />
               </div>
               <CardTitle className="text-2xl font-bold text-center">
                 Device Verification
@@ -620,6 +626,6 @@ export default function LoginPage() {
           </motion.div>
         )}
       </Card>
-    </div>
+    </AuthShell>
   );
 }

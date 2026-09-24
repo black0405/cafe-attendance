@@ -106,12 +106,12 @@ export default function RecentActivity({
       <div className="px-6 py-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FiClock className="text-blue-500" />
+            <FiClock className="text-emerald-500" />
             Activity Log
           </h2>
           {!compact && (
             <button
-              className="text-sm text-blue-500 hover:text-blue-600 transition-colors"
+              className="text-sm text-emerald-500 hover:text-emerald-600 transition-colors"
               onClick={() => setActivities([])}
             >
               Refresh
