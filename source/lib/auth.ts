@@ -92,8 +92,9 @@ export async function validateCredentials(
       return null;
     }
 
-    if (!(await checkPassword(password, user.password))) {
-      console.log("Password mismatch");
+    // Only admins sign in; staff use the kiosk (face + PTP).
+    if (!user.is_admin || !(await checkPassword(password, user.password))) {
+      console.log("Not an admin or password mismatch");
       return null;
     }
 

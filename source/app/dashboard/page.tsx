@@ -1,657 +1,219 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  FiClock,
-  FiCalendar,
-  FiActivity,
-  FiUser,
-  FiTrendingUp,
-  FiCheckCircle,
-} from "react-icons/fi";
-import { Line } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from "chart.js";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import RecentActivity from "@/app/components/RecentActivity";
+import Link from "next/link";
+import { Bar } from "react-chartjs-2";
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from "chart.js";
+import { Users, UserCheck, CalendarClock, Timer, Coffee, ScanFace, ArrowRight } from "lucide-react";
 import { CafeHero } from "@/components/CafeArt";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
-import { toast } from "react-hot-toast";
 
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  deviceInfo?: {
-    deviceId: string;
-    deviceName: string;
-    browserInfo: string;
-    isAdmin?: boolean;
-  };
+interface Stats {
+  staffCount: number;
+  shiftsToday: number;
+  hoursThisWeek: number;
+  inNow: { id: number; name: string; since: string; onLunch: boolean }[];
+  week: { label: string; shifts: number }[];
+  recent: { id: number; name: string; clockIn: string; clockOut: string | null }[];
 }
 
-interface AttendanceRecord {
-  type: "in" | "out";
-  timestamp: string;
+const time = (d: string) => new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const day = (d: string) => {
+  const date = new Date(d);
+  const today = new Date().toDateString() === date.toDateString();
+  return today ? "Today" : date.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+};
+const initials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+
+function Avatar({ name, tone = "brown" }: { name: string; tone?: "green" | "amber" | "brown" }) {
+  const cls = {
+    green: "bg-green-600 text-white",
+    amber: "bg-amber-100 text-amber-800",
+    brown: "bg-[#f3e8dc] text-[#7a4420]",
+  }[tone];
+  return (
+    <span className={`grid place-items-center h-9 w-9 shrink-0 rounded-full text-sm font-bold ${cls}`} aria-hidden>
+      {initials(name)}
+    </span>
+  );
 }
 
-interface Activity {
-  id: number;
-  userName: string;
-  userEmail: string;
-  clockIn: string;
-  clockOut: string | null;
-  status: "Active" | "Completed";
-  duration: string | null;
+function StatTile({ label, value, icon: Icon, hint }: { label: string; value: string | number; icon: typeof Users; hint?: string }) {
+  return (
+    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5 flex items-start justify-between">
+      <div>
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-3xl font-bold tracking-tight mt-1">{value}</p>
+        {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      </div>
+      <span className="grid place-items-center h-11 w-11 rounded-xl bg-accent text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+    </div>
+  );
 }
 
-interface DashboardStats {
-  activeUsers: number;
-  totalCheckIns: number;
-  weeklyCheckIns: number;
-  activeSessions: number;
-  attendanceTrends: {
-    date: string;
-    count: number;
-  }[];
-}
-
-interface StatCardProps {
-  title: string;
-  value: number | string;
-  icon: React.ReactNode;
+function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl bg-white border border-gray-100 shadow-sm">
+      <header className="flex items-center justify-between px-5 pt-5 pb-3">
+        <h2 className="font-semibold">{title}</h2>
+        {action}
+      </header>
+      <div className="px-5 pb-5">{children}</div>
+    </section>
+  );
 }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [clockedIn, setClockedIn] = useState(false);
-  const [lastAction, setLastAction] = useState<Date | null>(null);
-  const [recentActivities, setRecentActivities] = useState<AttendanceRecord[]>(
-    []
-  );
-  const [activeUsers, setActiveUsers] = useState<number>(0);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [name, setName] = useState("");
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    const initializeDashboard = async () => {
-      try {
-        const userData = localStorage.getItem("user");
-        const deviceToken = localStorage.getItem("deviceToken");
+    let headers: Record<string, string>;
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "null");
+      // Only admins sign in; staff use the kiosk.
+      if (!user?.is_admin || !localStorage.getItem("deviceToken")) throw new Error("Not an admin session");
+      setName(user.name || user.email);
+      headers = { "x-user-email": user.email, "x-user-ptp": user.ptp || "" };
+    } catch {
+      localStorage.removeItem("user");
+      localStorage.removeItem("deviceToken");
+      router.replace("/");
+      return;
+    }
 
-        if (!userData || !deviceToken) {
-          throw new Error("No auth data");
-        }
-
-        const user = JSON.parse(userData);
-
-        if (user.is_admin) {
-          if (!user.deviceToken) {
-            throw new Error("Invalid admin data");
-          }
-        } else {
-          if (!user.ptp || !user.deviceToken) {
-            throw new Error("Invalid user data");
-          }
-        }
-
-        setCurrentUser({
-          id: user.id || 0,
-          name: user.name || "",
-          email: user.email,
-          is_admin: user.is_admin || false,
-          deviceInfo: user.deviceInfo,
-        });
-
-        setIsAuthenticated(true);
-        await checkAttendanceStatus();
-      } catch (error) {
-        console.error("Dashboard initialization error:", error);
-        // Clear invalid data
-        localStorage.removeItem("user");
-        localStorage.removeItem("deviceToken");
-        router.replace("/");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeDashboard();
+    const load = () =>
+      fetch("/api/admin/dashboard-stats", { headers })
+        .then((r) => (r.status === 401 ? router.replace("/") : r.json()))
+        .then((d) => d && setStats(d))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
   }, [router]);
 
-  const handleForceLogout = () => {
-    localStorage.removeItem("user");
-    localStorage.removeItem("deviceToken");
-    router.replace("/");
-  };
-
-  const checkAttendanceStatus = async () => {
-    try {
-      const userData = localStorage.getItem("user");
-      if (!userData) {
-        handleForceLogout();
-        return;
-      }
-
-      const user = JSON.parse(userData);
-      const response = await fetch("/api/attendance/status", {
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-email": user.email,
-          "x-user-ptp": user.ptp || "",
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        if (data.error === "Unauthorized") {
-          handleForceLogout();
-          return;
-        }
-      }
-
-      const data = await response.json();
-      setClockedIn(data.isClockedIn);
-      setLastAction(data.lastAction ? new Date(data.lastAction) : null);
-    } catch (error) {
-      console.error("Error checking attendance status:", error);
-    }
-  };
-
-  const handleClockAction = async (action: "in" | "out") => {
-    try {
-      const userData = localStorage.getItem("user");
-      if (!userData) {
-        handleForceLogout();
-        return;
-      }
-
-      const user = JSON.parse(userData);
-      const response = await fetch(`/api/attendance/clock-${action}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-email": user.email,
-          "x-user-ptp": user.ptp || "",
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        if (data.error === "Unauthorized") {
-          handleForceLogout();
-          return;
-        }
-        throw new Error(data.error || `Failed to clock ${action}`);
-      }
-
-      const data = await response.json();
-      setClockedIn(action === "in");
-      setLastAction(new Date(data.record.clockIn));
-
-      // Refresh attendance status
-      await checkAttendanceStatus();
-
-      // Show success message
-      toast.success(`Successfully clocked ${action}`);
-    } catch (error) {
-      console.error(`Clock ${action} error:`, error);
-      toast.error(
-        error instanceof Error ? error.message : `Failed to clock ${action}`
-      );
-    }
-  };
-
-  const fetchRecentActivities = async () => {
-    try {
-      const response = await fetch("/api/attendance/recent");
-      const data = await response.json();
-      setRecentActivities(data.activities);
-    } catch (error) {
-      console.error("Error fetching recent activities:", error);
-    }
-  };
-
-  // Admin Dashboard Component
-  const AdminDashboard = () => {
-    const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [adminActivities, setAdminActivities] = useState<Activity[]>([]);
-
-    useEffect(() => {
-      const fetchStats = async () => {
-        try {
-          // Get user data from localStorage
-          const userData = localStorage.getItem("user");
-          if (!userData) {
-            handleForceLogout();
-            return;
-          }
-
-          const user = JSON.parse(userData);
-
-          const response = await fetch("/api/admin/dashboard-stats", {
-            headers: {
-              "Content-Type": "application/json",
-              "x-user-email": user.email,
-              "x-user-ptp": user.ptp || "", // PTP is optional for admin users
-            },
-          });
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              handleForceLogout();
-              return;
-            }
-            throw new Error("Failed to fetch stats");
-          }
-
-          const data = await response.json();
-          setStats(data);
-        } catch (error) {
-          console.error("Error fetching dashboard stats:", error);
-        }
-      };
-
-      const fetchAdminActivities = async () => {
-        try {
-          const userData = localStorage.getItem("user");
-          if (!userData) {
-            handleForceLogout();
-            return;
-          }
-
-          const user = JSON.parse(userData);
-          const response = await fetch("/api/admin/recent-activity", {
-            headers: {
-              "Content-Type": "application/json",
-              "x-user-email": user.email,
-              "x-user-ptp": user.ptp || "",
-            },
-          });
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              handleForceLogout();
-              return;
-            }
-            throw new Error("Failed to fetch activities");
-          }
-
-          const data = await response.json();
-          setAdminActivities(data);
-        } catch (error) {
-          console.error("Error fetching admin activities:", error);
-        }
-      };
-
-      const fetchData = async () => {
-        await Promise.all([fetchStats(), fetchAdminActivities()]);
-      };
-
-      fetchData();
-    }, []);
-
-    const chartData = {
-      labels:
-        stats?.attendanceTrends.map((trend) =>
-          new Date(trend.date).toLocaleDateString("en-US", { weekday: "short" })
-        ) || [],
-      datasets: [
-        {
-          label: "Daily Check-ins",
-          data: stats?.attendanceTrends.map((trend) => trend.count) || [],
-          borderColor: "#16a34a",
-          backgroundColor: "rgba(34, 197, 94, 0.15)",
-          pointBackgroundColor: "#15803d",
-          fill: true,
-          tension: 0.3,
-        },
-      ],
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard
-            title="Active Users"
-            value={stats?.activeUsers || 0}
-            icon={<FiUser className="w-8 h-8 text-emerald-500" />}
-          />
-          <StatCard
-            title="Total Check-ins"
-            value={stats?.totalCheckIns || 0}
-            icon={<FiClock className="w-8 h-8 text-green-500" />}
-          />
-          <StatCard
-            title="This Week"
-            value={stats?.weeklyCheckIns || 0}
-            icon={<FiCalendar className="w-8 h-8 text-amber-500" />}
-          />
-          <StatCard
-            title="Active Sessions"
-            value={stats?.activeSessions || 0}
-            icon={<FiActivity className="w-8 h-8 text-orange-500" />}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Attendance Trends</h2>
-            <Line data={chartData} />
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Recent Activities</h2>
-            <div className="space-y-4">
-              {adminActivities && adminActivities.length > 0 ? (
-                adminActivities.map((activity) => (
-                  <ActivityItem key={activity.id} activity={activity} />
-                ))
-              ) : (
-                <p className="text-gray-500">No recent activities</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // User Dashboard Component
-  const UserDashboard = () => {
-    const [userStats, setUserStats] = useState({
-      totalHours: 0,
-      weeklyHours: 0,
-      monthlyAttendance: 0,
-      streakDays: 0,
-    });
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [attendanceDates, setAttendanceDates] = useState<Date[]>([]);
-
-    useEffect(() => {
-      // Fetch attendance dates for the calendar
-      const fetchAttendanceDates = async () => {
-        try {
-          const userData = localStorage.getItem("user");
-          if (!userData) return;
-
-          const user = JSON.parse(userData);
-          const response = await fetch("/api/attendance/calendar", {
-            headers: {
-              "Content-Type": "application/json",
-              "x-user-email": user.email,
-              "x-user-ptp": user.ptp || "",
-            },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setAttendanceDates(
-              data.map((record: any) => new Date(record.clockIn))
-            );
-          }
-        } catch (error) {
-          console.error("Error fetching attendance dates:", error);
-        }
-      };
-
-      fetchAttendanceDates();
-    }, [clockedIn]); // Add clockedIn as dependency to refresh calendar
-
-    const tileClassName = ({ date }: { date: Date }) => {
-      if (
-        attendanceDates.some(
-          (attendanceDate) =>
-            attendanceDate.toDateString() === date.toDateString()
-        )
-      ) {
-        return "bg-green-100 text-green-800 rounded-full";
-      }
-      return "";
-    };
-
-    return (
-      <div className="space-y-6">
-        {/* Clock In/Out Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  clockedIn ? "bg-green-100" : "bg-red-100"
-                }`}
-              >
-                <FiClock
-                  className={`w-8 h-8 ${
-                    clockedIn ? "text-green-500" : "text-red-500"
-                  }`}
-                />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold">
-                  {clockedIn ? "Currently Working" : "Not Checked In"}
-                </h2>
-                {lastAction && (
-                  <p className="text-sm text-gray-500">
-                    Last action: {lastAction.toLocaleString()}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => handleClockAction(clockedIn ? "out" : "in")}
-              className={`px-6 py-3 rounded-lg text-white font-medium transition-all ${
-                clockedIn
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-green-500 hover:bg-green-600"
-              }`}
-            >
-              Clock {clockedIn ? "Out" : "In"}
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm">Today's Hours</p>
-                <p className="text-2xl font-semibold mt-1">
-                  {clockedIn ? "Active" : "0h 0m"}
-                </p>
-              </div>
-              <div className="bg-emerald-50 p-3 rounded-full">
-                <FiClock className="w-6 h-6 text-emerald-500" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm">Weekly Hours</p>
-                <p className="text-2xl font-semibold mt-1">
-                  {userStats.weeklyHours}h
-                </p>
-              </div>
-              <div className="bg-green-50 p-3 rounded-full">
-                <FiTrendingUp className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm">Monthly Attendance</p>
-                <p className="text-2xl font-semibold mt-1">
-                  {userStats.monthlyAttendance}%
-                </p>
-              </div>
-              <div className="bg-amber-50 p-3 rounded-full">
-                <FiCheckCircle className="w-6 h-6 text-amber-500" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm">Attendance Streak</p>
-                <p className="text-2xl font-semibold mt-1">
-                  {userStats.streakDays} days
-                </p>
-              </div>
-              <div className="bg-orange-50 p-3 rounded-full">
-                <FiActivity className="w-6 h-6 text-orange-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Activity and Calendar Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[600px]">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100">
-            <RecentActivity compact={true} />
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <FiCalendar className="text-emerald-500" />
-              Monthly Overview
-            </h2>
-            <div className="calendar-container h-full">
-              <Calendar
-                onChange={setSelectedDate}
-                value={selectedDate}
-                tileClassName={tileClassName}
-                className="w-full border-none"
-              />
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium text-gray-700 mb-2">
-                  {selectedDate.toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </h3>
-                {attendanceDates.some(
-                  (date) => date.toDateString() === selectedDate.toDateString()
-                ) ? (
-                  <div className="text-green-600 flex items-center gap-2">
-                    <FiCheckCircle />
-                    <span>Present</span>
-                  </div>
-                ) : (
-                  <div className="text-gray-500">No attendance record</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (loading || !isAuthenticated || !currentUser) {
-    return null; // or a loading spinner
-  }
+  if (!name) return null;
 
   return (
-    <main className="container mx-auto px-4 py-8">
-      <section className="mb-6 rounded-2xl bg-gradient-to-r from-green-700 via-green-800 to-[#3f2415] text-white shadow-lg px-6 py-4 flex items-center justify-between gap-4 overflow-hidden">
+    <div className="space-y-6">
+      <section className="rounded-2xl bg-gradient-to-r from-green-700 via-green-800 to-[#3f2415] text-white shadow-lg px-6 py-5 flex items-center justify-between gap-4 overflow-hidden">
         <div>
-          <h1 className="text-2xl font-bold">
-            Welcome, {currentUser.name || currentUser.email}
-          </h1>
-          <p className="text-green-50/80 text-sm mt-1">
+          <p className="text-green-50/80 text-sm">
             {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
           </p>
+          <h1 className="text-2xl sm:text-3xl font-bold mt-1">Welcome back, {name}</h1>
+          <Link
+            href="/kiosk"
+            className="inline-flex items-center gap-2 mt-4 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium transition-colors"
+          >
+            <ScanFace className="h-4 w-4" /> Open kiosk
+          </Link>
         </div>
-        <CafeHero className="hidden sm:block h-28 w-auto -my-2" />
+        <CafeHero className="hidden sm:block h-32 w-auto -my-3" />
       </section>
-      {currentUser.is_admin ? <AdminDashboard /> : <UserDashboard />}
-    </main>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatTile label="Staff" value={stats?.staffCount ?? "–"} icon={Users} />
+        <StatTile
+          label="Clocked in now"
+          value={stats?.inNow.length ?? "–"}
+          icon={UserCheck}
+          hint={stats ? `${stats.inNow.filter((p) => p.onLunch).length} on lunch` : undefined}
+        />
+        <StatTile label="Shifts today" value={stats?.shiftsToday ?? "–"} icon={CalendarClock} />
+        <StatTile label="Hours this week" value={stats ? `${stats.hoursThisWeek}h` : "–"} icon={Timer} hint="Lunch deducted" />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <Panel title="Who's in">
+          {stats && stats.inNow.length === 0 && <p className="text-sm text-gray-500 py-6 text-center">Nobody is clocked in.</p>}
+          <ul className="divide-y divide-gray-100">
+            {stats?.inNow.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 py-2.5">
+                <Avatar name={p.name} tone={p.onLunch ? "amber" : "green"} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{p.name}</p>
+                  <p className="text-xs text-gray-500">
+                    Since {time(p.since)}
+                    {day(p.since) !== "Today" && `, ${day(p.since)}`}
+                  </p>
+                </div>
+                {p.onLunch && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 text-xs px-2 py-0.5">
+                    <Coffee className="h-3 w-3" /> Lunch
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        <Panel title="Shifts, last 7 days">
+          <div className="h-56">
+            {stats && (
+              <Bar
+                data={{
+                  labels: stats.week.map((d) => d.label),
+                  datasets: [
+                    {
+                      data: stats.week.map((d) => d.shifts),
+                      backgroundColor: "#22c55e",
+                      hoverBackgroundColor: "#15803d",
+                      borderRadius: 8,
+                      maxBarThickness: 32,
+                    },
+                  ],
+                }}
+                options={{
+                  maintainAspectRatio: false,
+                  plugins: { tooltip: { callbacks: { label: (c) => `${c.parsed.y} shifts` } } },
+                  scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: "#f1f5f9" }, border: { display: false } },
+                  },
+                }}
+              />
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Recent activity"
+          action={
+            <Link href="/dashboard/reports" className="text-sm text-primary inline-flex items-center gap-1 hover:underline">
+              Reports <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          }
+        >
+          {stats && stats.recent.length === 0 && <p className="text-sm text-gray-500 py-6 text-center">No shifts yet.</p>}
+          <ul className="divide-y divide-gray-100">
+            {stats?.recent.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 py-2.5">
+                <Avatar name={r.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{r.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {day(r.clockIn)}, {time(r.clockIn)} – {r.clockOut ? time(r.clockOut) : "now"}
+                  </p>
+                </div>
+                <span
+                  className={`text-xs rounded-full px-2 py-0.5 ${
+                    r.clockOut ? "bg-gray-100 text-gray-600" : "bg-green-50 text-green-700"
+                  }`}
+                >
+                  {r.clockOut ? "Done" : "Active"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
+    </div>
   );
 }
-
-// Utility Components
-const StatCard = ({ title, value, icon }: StatCardProps) => (
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 p-5">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-gray-500">{title}</p>
-        <p className="text-2xl font-semibold mt-1">{value}</p>
-      </div>
-      {icon}
-    </div>
-  </div>
-);
-
-const ActivityItem = ({ activity }: { activity: Activity }) => {
-  return (
-    <div className="flex items-center space-x-4">
-      <div
-        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-          activity.status === "Active" ? "bg-green-100" : "bg-gray-100"
-        }`}
-      >
-        <FiClock
-          className={`w-5 h-5 ${
-            activity.status === "Active" ? "text-green-500" : "text-gray-500"
-          }`}
-        />
-      </div>
-      <div>
-        <p className="font-medium">
-          <span className="text-gray-700">{activity.userName}</span>
-          {" - "}
-          <span
-            className={
-              activity.status === "Active" ? "text-green-500" : "text-gray-500"
-            }
-          >
-            {activity.status}
-          </span>
-        </p>
-        <p className="text-sm text-gray-500">
-          Clocked in: {new Date(activity.clockIn).toLocaleString()}
-          {activity.clockOut && (
-            <>
-              <br />
-              Clocked out: {new Date(activity.clockOut).toLocaleString()}
-            </>
-          )}
-        </p>
-        {activity.duration && (
-          <p className="text-xs text-gray-400">Duration: {activity.duration}</p>
-        )}
-      </div>
-    </div>
-  );
-};

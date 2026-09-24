@@ -1,9 +1,9 @@
-import { Fingerprint, ScanFace, FileSpreadsheet } from "lucide-react";
+import { ScanFace, Coffee, FileSpreadsheet } from "lucide-react";
 import { CafeHero, patternBg } from "@/components/CafeArt";
 
 const FEATURES = [
-  { icon: ScanFace, text: "Face recognition picks the staff member" },
-  { icon: Fingerprint, text: "Fingerprint confirms every clock in and out" },
+  { icon: ScanFace, text: "Clock in and out by face at the kiosk" },
+  { icon: Coffee, text: "Lunch breaks tracked and deducted" },
   { icon: FileSpreadsheet, text: "Shift reports as Excel workbooks" },
 ];
 

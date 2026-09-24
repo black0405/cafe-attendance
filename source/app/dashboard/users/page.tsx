@@ -2,17 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Plus, Users2, UserPlus } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { UserTable } from "@/components/UserTable";
 import { toast } from "sonner";
 
@@ -88,58 +79,31 @@ export default function UsersPage() {
   if (!currentUser?.is_admin) return null;
 
   return (
-    <div className="h-[calc(100vh-4rem)]">
-      <main className="container mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                    <Users2 className="h-6 w-6" />
-                    User Management
-                  </CardTitle>
-                  <CardDescription>
-                    Manage your organization's user accounts
-                  </CardDescription>
-                </div>
-                <Button onClick={() => router.push("/dashboard/new-user")}>
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Add New User
-                </Button>
-              </div>
-            </CardHeader>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Staff</h1>
+          <p className="text-gray-500 mt-1">
+            Add staff, share their PTP code, and enrol their face on the kiosk.
+          </p>
+        </div>
+        <Button onClick={() => router.push("/dashboard/new-user")} className="rounded-full shadow-sm">
+          <UserPlus className="h-4 w-4 mr-2" />
+          Add staff
+        </Button>
+      </div>
 
-            <CardContent>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-destructive/10 text-destructive px-4 py-3 rounded-md mb-4"
-                >
-                  {error}
-                </motion.div>
-              )}
+      {error && (
+        <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-xl">{error}</div>
+      )}
 
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              ) : (
-                <UserTable
-                  users={users}
-                  onUserUpdate={fetchUsers}
-                  currentUserEmail={getCurrentUserEmail()}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </main>
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <UserTable users={users} onUserUpdate={fetchUsers} currentUserEmail={getCurrentUserEmail()} />
+      )}
     </div>
   );
 }

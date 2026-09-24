@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Mail } from "lucide-react";
+import { FileSpreadsheet, Mail, CalendarDays, CalendarRange, Download } from "lucide-react";
 import { toast } from "sonner";
 
 function adminHeaders(): Record<string, string> {
@@ -10,10 +10,10 @@ function adminHeaders(): Record<string, string> {
 }
 
 const DOWNLOADS = [
-  { label: "This week", range: "week", offset: 0 },
-  { label: "Last week", range: "week", offset: -1 },
-  { label: "This month", range: "month", offset: 0 },
-  { label: "Last month", range: "month", offset: -1 },
+  { label: "This week", range: "week", offset: 0, icon: CalendarDays },
+  { label: "Last week", range: "week", offset: -1, icon: CalendarDays },
+  { label: "This month", range: "month", offset: 0, icon: CalendarRange },
+  { label: "Last month", range: "month", offset: -1, icon: CalendarRange },
 ];
 
 interface Settings {
@@ -87,83 +87,96 @@ export default function ReportsPage() {
         type={type}
         value={String(s?.[key] ?? "")}
         onChange={(e) => s && setS({ ...s, [key]: e.target.value })}
-        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        className="mt-1 block w-full rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary focus:bg-white"
         placeholder={hint}
       />
     </label>
   );
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-8">
-      <section>
-        <h1 className="text-2xl font-bold mb-3 flex items-center gap-2">
-          <Download className="h-6 w-6" /> Download report
-        </h1>
-        <p className="text-sm text-gray-600 mb-3">
-          Excel file. Sheet 1: one row per shift. Sheet 2: shifts and total hours per person.
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Reports</h1>
+        <p className="text-gray-500 mt-1">
+          Excel workbooks: one row per shift, plus total hours per person (lunch deducted).
         </p>
-        <div className="flex flex-wrap gap-2">
-          {DOWNLOADS.map((d) => (
-            <button
-              key={d.label}
-              onClick={() => download(d.range, d.offset)}
-              className="px-4 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700"
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+      </div>
+
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {DOWNLOADS.map(({ label, range, offset, icon: Icon }) => (
+          <button
+            key={label}
+            onClick={() => download(range, offset)}
+            className="group rounded-2xl bg-white border border-gray-100 shadow-sm p-5 text-left transition hover:shadow-md hover:border-green-200"
+          >
+            <span className="grid place-items-center h-11 w-11 rounded-xl bg-accent text-primary">
+              <Icon className="h-5 w-5" />
+            </span>
+            <p className="font-semibold mt-4">{label}</p>
+            <p className="text-sm text-gray-500 flex items-center gap-1.5 mt-1 group-hover:text-primary">
+              <FileSpreadsheet className="h-4 w-4" /> Download .xlsx
+              <Download className="h-3.5 w-3.5 ml-auto opacity-0 group-hover:opacity-100 transition" />
+            </p>
+          </button>
+        ))}
       </section>
 
-      <section>
-        <h2 className="text-2xl font-bold mb-3 flex items-center gap-2">
-          <Mail className="h-6 w-6" /> Weekly email
-        </h2>
-        <p className="text-sm text-gray-600 mb-3">
-          Every Monday after 8:00 the previous week&apos;s Excel file is emailed, as long
-          as the app is running on the laptop. For Gmail use smtp.gmail.com, port
-          587, and an App Password (not your normal password).
-        </p>
+      <section className="rounded-2xl bg-white border border-gray-100 shadow-sm">
+        <header className="flex items-start gap-4 p-6 border-b border-gray-100">
+          <span className="grid place-items-center h-11 w-11 shrink-0 rounded-xl bg-accent text-primary">
+            <Mail className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-semibold text-lg">Weekly email</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Every Monday after 8:00, last week&apos;s workbook is emailed while the app is running.
+              For Gmail use smtp.gmail.com, port 587 and an App Password.
+            </p>
+          </div>
+        </header>
         {s && (
-          <form onSubmit={save} className="space-y-3 bg-white border rounded-lg p-4">
-            <label className="flex items-center gap-2 text-sm font-medium">
+          <form onSubmit={save} className="p-6 space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-xl bg-gray-50 px-4 py-3">
+              <span className="text-sm font-medium">Send weekly report automatically</span>
               <input
                 type="checkbox"
+                className="h-5 w-5 accent-green-700"
                 checked={s.report_weekly === "1"}
                 onChange={(e) => setS({ ...s, report_weekly: e.target.checked ? "1" : "0" })}
               />
-              Send weekly report automatically
             </label>
-            {field("report_to", "Send to (admin email)", "email", "you@example.com")}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">{field("smtp_host", "SMTP host", "text", "smtp.gmail.com")}</div>
+            {field("report_to", "Send to", "email", "you@example.com")}
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-2">{field("smtp_host", "SMTP host", "text", "smtp.gmail.com")}</div>
               {field("smtp_port", "Port", "number", "587")}
             </div>
-            {field("smtp_user", "SMTP username (sender email)", "email")}
-            {field(
-              "smtp_pass",
-              s.smtp_pass_set ? "SMTP password (leave blank to keep)" : "SMTP password",
-              "password"
-            )}
-            {s.report_last_weekly && (
-              <p className="text-xs text-gray-500">Last sent: {s.report_last_weekly}</p>
-            )}
-            <div className="flex gap-2 pt-2">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {field("smtp_user", "Sender email", "email")}
+              {field(
+                "smtp_pass",
+                s.smtp_pass_set ? "Password (blank keeps current)" : "Password",
+                "password"
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="submit"
                 disabled={busy}
-                className="px-4 py-2 rounded-md bg-green-600 text-white text-sm hover:bg-green-700 disabled:opacity-50"
+                className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
               >
-                Save
+                Save settings
               </button>
               <button
                 type="button"
                 onClick={sendTest}
                 disabled={busy}
-                className="px-4 py-2 rounded-md border text-sm hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-full border border-gray-200 px-5 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
               >
-                Send last week now (test)
+                Send last week now
               </button>
+              {s.report_last_weekly && (
+                <span className="text-xs text-gray-500 ml-auto">Last sent: {s.report_last_weekly}</span>
+              )}
             </div>
           </form>
         )}

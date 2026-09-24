@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Cafe Attendance",
-  description: "Staff attendance with fingerprint and face recognition on one laptop",
+  description: "Staff attendance with face recognition on one laptop",
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>{children}</Providers>
-        <Toaster />
+        <Toaster richColors closeButton position="top-center" />
       </body>
     </html>
   );

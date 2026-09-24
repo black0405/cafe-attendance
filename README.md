@@ -3,18 +3,18 @@
 # Cafe Attendance
 
 Staff attendance for a small cafe, running on one Windows laptop. Staff look
-at the webcam, the kiosk greets them by name, they touch the fingerprint reader
-to clock in or out. The owner manages staff, downloads Excel reports and gets a
+at the webcam, the kiosk recognises them, they type their 4-digit PTP and tap
+Clock in or Clock out. The owner manages staff, downloads Excel reports and gets a
 weekly email.
 
 No cloud, no Docker, no server to rent. One installer, one SQLite file.
 
 ## Features
 
-- Face recognition on the laptop webcam picks the staff member; fingerprint confirms them (Windows Hello via WebAuthn)
-- Lunch break per shift (start and end by fingerprint), deducted from hours worked
+- Clock in and out by face recognition plus a 4-digit PTP code; the server checks both on every punch
+- Lunch break per shift, deducted from hours worked
 - Kiosk screen that works without a login; admin controls only appear while an admin is signed in
-- Staff identified by phone number, email optional, login with either
+- Staff added with name and phone only, no password and no sign-in; only the admin signs in
 - Admin dashboard: staff list, attendance calendar, recent activity
 - Weekly and monthly Excel reports, plus an automatic weekly email
 - One-click Windows installer, runs hidden in the background, data kept across upgrades
@@ -33,26 +33,29 @@ The server runs hidden. Use **Stop Cafe Attendance** in the Start Menu to stop i
 **Uninstall Cafe Attendance** is in the Start Menu too (also under Settings, Apps). It asks whether to delete the attendance data.
 Data lives in `%LOCALAPPDATA%\CafeAttendance\attendance.db`. Back it up by copying that file. Logs are next to it.
 
-## Fingerprint setup
+## Staff setup
 
-1. **Windows Hello:** Settings, Accounts, Sign-in options, Fingerprint recognition. Set a PIN, then add each staff member's finger to this Windows account (Windows allows 10 fingers per account).
-2. Open the app, click **Admin login** on the kiosk, sign in.
-3. **Users:** add each staff member with a phone number.
-4. **Kiosk:** for each person click **Enroll finger** and have them touch the reader. Then have them look at the camera and click **Enroll face**; repeat **Add face sample** 2 or 3 times from slightly different angles.
-5. **Log out.** The kiosk keeps working; Enroll and Revoke buttons disappear.
+1. Open the app, click **Admin login** on the kiosk, sign in.
+2. **Staff:** click **Add staff** for each person with a name and phone number. No password is needed: a 4-digit **PTP** code is generated and shown in the Staff list. Give each person their code. **Reset PTP** issues a new one. Staff never sign in to the website; only the admin does.
+3. **Kiosk:** for each person, have them look at the camera and click **Enroll face**. Click **Add face sample** 2 or 3 more times from slightly different angles.
+4. **Log out.** The kiosk keeps working; the Enroll and Remove buttons disappear.
 
-Daily use: stand in front of the camera. The kiosk greets you by name and shows Clock in / Clock out / Lunch buttons. Tap one, touch the reader. If the camera does not recognise you, tap your name instead. Card turns green when clocked in.
-While clocked in a **Lunch** button appears: tap it and touch the reader to start
-lunch (card turns amber), tap **Back from lunch** to end it. One lunch per shift.
-If someone forgets to end lunch, clocking out ends it.
+Daily use: stand in front of the camera. The kiosk greets you by name and asks
+for your PTP. Type it, then tap Clock in / Clock out / Lunch while still facing
+the camera: the face and the PTP are both checked before the punch is saved. A
+wrong PTP keeps the panel open to try again. A card turns green when clocked
+in. While clocked in, **Lunch** starts a break (card turns amber) and **Back from
+lunch** ends it. One lunch per shift. If someone forgets to end lunch, clocking
+out ends it. Tapping a name on the board does nothing; only a recognised face can
+clock in.
 
 Limits to know:
 
-- Windows Hello confirms "an enrolled finger on this Windows account", not which finger. Face recognition supplies the "who"; the finger proves a live person is present. A photo of a coworker plus any enrolled finger could still fool it, so keep the camera at the counter in view of others.
-- Face recognition needs decent light and a camera roughly at face height. Masks, caps and strong backlight cause misses; the kiosk then falls back to tapping your name.
+- A webcam is required. Without one, nobody can clock in.
+- Face recognition needs decent light and a camera roughly at face height. Masks, caps and strong backlight cause misses; step closer and face the camera.
+- There is no liveness check, so a photo of a coworker could pass the face step; the PTP is the second lock. Keep the kiosk at the counter where others can see it.
 - Face data is stored as a 128-number template on the laptop only, never as photos. Get staff consent; **Remove face** deletes it.
-- Windows Hello allows a PIN fallback; the browser cannot disable it.
-- 10 fingers per Windows account is a Windows limit.
+- A PTP is only 4 digits and only works together with the matching face. The server only listens on the laptop itself; do not expose the app on a network.
 
 ## Reports
 
@@ -105,11 +108,10 @@ Set in `source/installer/start.cmd` for installed copies, or `.env` in developme
 | `DATABASE_URL` | `file:%LOCALAPPDATA%/CafeAttendance/attendance.db` | SQLite file |
 | `JWT_SECRET` | generated once into `jwt.secret` | token signing |
 | `PORT` / `HOSTNAME` | `3789` / `127.0.0.1` | where the server listens |
-| `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | `localhost` / `http://localhost:3789` | fingerprint domain binding |
 
 ## Stack
 
-Next.js 13, Prisma, SQLite, SimpleWebAuthn, face-api.js (TensorFlow.js), nodemailer, ExcelJS, Inno Setup.
+Next.js 13, Prisma, SQLite, face-api.js (TensorFlow.js), nodemailer, ExcelJS, Inno Setup.
 
 ## License
 

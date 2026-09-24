@@ -8,7 +8,6 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Loader2, ShieldAlert, UserPlus, UserCog } from "lucide-react";
 import { toast } from "sonner";
-import { Toaster } from "react-hot-toast";
 
 import {
   Form,
@@ -81,6 +80,10 @@ export function UserForm({ initialData, mode }: UserFormProps) {
   });
 
   const onSubmit = async (data: UserFormValues) => {
+    if (mode === "add" && data.role === "admin" && !data.password) {
+      form.setError("password", { message: "Admins need a password to sign in" });
+      return;
+    }
     setIsLoading(true);
     try {
       const userData = localStorage.getItem("user");
@@ -111,9 +114,9 @@ export function UserForm({ initialData, mode }: UserFormProps) {
         body: JSON.stringify(requestBody),
       });
 
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to save user");
+        throw new Error(result.error || "Failed to save user");
       }
 
       toast.success(
@@ -123,8 +126,11 @@ export function UserForm({ initialData, mode }: UserFormProps) {
         {
           description:
             mode === "add"
-              ? "The new user has been added to the system"
+              ? result.ptp && data.role !== "admin"
+                ? `PTP code: ${result.ptp}. They type it at the kiosk after face recognition.`
+                : "The new user has been added to the system"
               : "The user details have been updated",
+          duration: mode === "add" ? 15000 : undefined,
         }
       );
 
@@ -142,22 +148,12 @@ export function UserForm({ initialData, mode }: UserFormProps) {
 
   return (
     <>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: "#333",
-            color: "#fff",
-          },
-        }}
-      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className="max-w-2xl mx-auto">
+        <Card className="max-w-2xl mx-auto rounded-2xl border-gray-100 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
               {mode === "add" ? (
@@ -166,13 +162,13 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                 <UserCog className="h-6 w-6 text-primary" />
               )}
               <CardTitle>
-                {mode === "add" ? "Add New User" : "Edit User"}
+                {mode === "add" ? "Add staff" : "Edit staff"}
               </CardTitle>
             </div>
             <CardDescription>
               {mode === "add"
-                ? "Create a new user account in the system"
-                : "Modify existing user account details"}
+                ? "They clock in at the kiosk with their face and a PTP code. No password needed."
+                : "Update their details. Their PTP code stays the same."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -186,16 +182,16 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name</FormLabel>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter user's full name"
+                          placeholder="e.g. Priya Sharma"
                           {...field}
                           disabled={isLoading}
                         />
                       </FormControl>
                       <FormDescription>
-                        The user's display name in the system
+                        Shown on the kiosk when their face is recognised
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -207,17 +203,17 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>Phone</FormLabel>
                       <FormControl>
                         <Input
                           type="tel"
-                          placeholder="Enter user's phone number"
+                          placeholder="e.g. 98765 43210"
                           {...field}
                           disabled={isLoading}
                         />
                       </FormControl>
                       <FormDescription>
-                        Used for login and shown on the kiosk
+                        For your records; staff don't use it to clock in
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -229,7 +225,7 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address (optional)</FormLabel>
+                      <FormLabel>Email (optional)</FormLabel>
                       <FormControl>
                         <Input
                           type="email"
@@ -248,7 +244,7 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                   name="role"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>User Role</FormLabel>
+                      <FormLabel>Role</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -260,12 +256,12 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="user">Regular User</SelectItem>
-                          <SelectItem value="admin">Administrator</SelectItem>
+                          <SelectItem value="user">Staff</SelectItem>
+                          <SelectItem value="admin">Admin (can sign in)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        Select the role and access level for this user
+                        Only admins can sign in to this dashboard
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -290,6 +286,7 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                   </Alert>
                 )}
 
+                {form.watch("role") === "admin" && (
                 <FormField
                   control={form.control}
                   name="password"
@@ -318,20 +315,27 @@ export function UserForm({ initialData, mode }: UserFormProps) {
                     </FormItem>
                   )}
                 />
+                )}
+                {form.watch("role") !== "admin" && (
+                  <p className="text-sm text-muted-foreground">
+                    A 4-digit PTP code is generated and shown in the Staff list. Give it to
+                    them, then enrol their face on the kiosk.
+                  </p>
+                )}
 
                 <div className="flex items-center gap-4 pt-4">
-                  <Button type="submit" disabled={isLoading} className="flex-1">
+                  <Button type="submit" disabled={isLoading} className="flex-1 rounded-full">
                     {isLoading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    {mode === "add" ? "Create User" : "Save Changes"}
+                    {mode === "add" ? "Add staff" : "Save changes"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     disabled={isLoading}
                     onClick={() => router.back()}
-                    className="flex-1"
+                    className="flex-1 rounded-full"
                   >
                     Cancel
                   </Button>

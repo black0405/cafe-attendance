@@ -11,6 +11,7 @@ export function LogoutButton() {
   const handleLogout = () => {
     try {
       localStorage.removeItem("user");
+      localStorage.removeItem("deviceToken");
       toast.success("Logged out successfully");
       router.push("/");
     } catch (error) {
@@ -27,7 +28,7 @@ export function LogoutButton() {
       className="text-red-500 hover:text-red-600 hover:bg-red-50"
     >
       <LogOut className="h-4 w-4 mr-2" />
-      Logout
+      Log out
     </Button>
   );
 }

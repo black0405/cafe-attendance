@@ -1,81 +1,71 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { validateAuth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
+import { workedHours } from "@/lib/punch";
 
-interface AttendanceTrend {
-  date: string;
-  count: number;
-}
+export const dynamic = "force-dynamic";
 
-interface TrendResult {
-  clockIn: Date;
-  _count: {
-    id: number;
-  };
-}
+const DAY = 86_400_000;
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
+// Everything the admin dashboard shows, in one request.
 export async function GET(request: Request) {
-  try {
-    const email = request.headers.get("x-user-email");
-    const ptp = request.headers.get("x-user-ptp");
-
-    console.log("Dashboard stats request for:", { email, ptp });
-
-    const user = await validateAuth(email || "", ptp || "");
-    if (!user || !user.is_admin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get total users
-    const totalUsers = await prisma.user.count();
-
-    // Get active users (clocked in today)
-    const activeUsers = await prisma.attendanceRecord.count({
-      where: {
-        clockIn: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-        },
-        clockOut: null,
-      },
-    });
-
-    // Get attendance trends for the last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const attendanceTrends = await prisma.attendanceRecord.groupBy({
-      by: ["clockIn"],
-      where: {
-        clockIn: {
-          gte: sevenDaysAgo,
-        },
-      },
-      _count: {
-        id: true,
-      },
-      orderBy: {
-        clockIn: "asc",
-      },
-    });
-
-    // Format trends data
-    const trends: AttendanceTrend[] = (attendanceTrends as TrendResult[]).map(
-      (trend) => ({
-        date: trend.clockIn.toISOString(),
-        count: trend._count.id,
-      })
-    );
-
-    return NextResponse.json({
-      totalUsers,
-      activeUsers,
-      attendanceTrends: trends,
-    });
-  } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  if (!(await requireAdmin(request))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const now = new Date();
+  const today = startOfDay(now);
+  const weekAgo = new Date(today.getTime() - 6 * DAY);
+  const monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * DAY);
+  const since = monday < weekAgo ? monday : weekAgo;
+
+  const [staffCount, open, records] = await Promise.all([
+    prisma.user.count({ where: { archived: false, is_admin: false } }),
+    prisma.attendanceRecord.findMany({
+      where: { clockOut: null },
+      orderBy: { clockIn: "asc" },
+      include: { user: { select: { name: true, phone: true } } },
+    }),
+    prisma.attendanceRecord.findMany({
+      where: { clockIn: { gte: since } },
+      orderBy: { clockIn: "desc" },
+      include: { user: { select: { name: true, phone: true } } },
+    }),
+  ]);
+
+  const nameOf = (u: { name: string | null; phone: string | null }) => u.name || u.phone || "Staff";
+
+  // Open shifts count up to now so today's hours are live.
+  const hoursThisWeek = records
+    .filter((r) => r.clockIn >= monday)
+    .reduce((sum, r) => sum + (workedHours({ ...r, clockOut: r.clockOut ?? now }) ?? 0), 0);
+
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(weekAgo.getTime() + i * DAY);
+    const next = new Date(day.getTime() + DAY);
+    return {
+      label: day.toLocaleDateString("en-US", { weekday: "short" }),
+      shifts: records.filter((r) => r.clockIn >= day && r.clockIn < next).length,
+    };
+  });
+
+  return NextResponse.json({
+    staffCount,
+    shiftsToday: records.filter((r) => r.clockIn >= today).length,
+    hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
+    inNow: open.map((r) => ({
+      id: r.id,
+      name: nameOf(r.user),
+      since: r.clockIn,
+      onLunch: Boolean(r.lunchStart && !r.lunchEnd),
+    })),
+    week,
+    recent: records.slice(0, 8).map((r) => ({
+      id: r.id,
+      name: nameOf(r.user),
+      clockIn: r.clockIn,
+      clockOut: r.clockOut,
+    })),
+  });
 }

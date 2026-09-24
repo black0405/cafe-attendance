@@ -1,19 +1,8 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Edit2, RefreshCw, Trash2 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Pencil, RefreshCw, Trash2, Search, KeyRound } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,16 +14,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge, BadgeProps } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 interface User {
   id: number;
   name: string;
   email: string | null;
-  phone: string | null;
+  phone?: string | null;
   is_admin: boolean;
-  ptp: string | null;
+  ptp?: string | null;
 }
 
 interface UserTableProps {
@@ -43,467 +31,226 @@ interface UserTableProps {
   currentUserEmail: string;
 }
 
-interface ExtendedBadgeProps extends BadgeProps {
-  variant?: "default" | "secondary" | "destructive" | "outline";
+const initials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+
+async function adminFetch(url: string, method: string) {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json", "x-user-email": user.email, "x-user-ptp": user.ptp || "" },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
 
-export function UserTable({
-  users,
-  onUserUpdate,
-  currentUserEmail,
-}: UserTableProps) {
+function Confirm({
+  trigger,
+  title,
+  body,
+  action,
+  danger,
+  onConfirm,
+}: {
+  trigger: React.ReactNode;
+  title: string;
+  body: React.ReactNode;
+  action: string;
+  danger?: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogContent className="sm:max-w-[420px] rounded-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{body}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className={`rounded-full text-white ${danger ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-primary/90"}`}
+          >
+            {action}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+const iconBtn =
+  "grid place-items-center h-9 w-9 rounded-full text-gray-500 transition-colors disabled:opacity-40";
+
+export function UserTable({ users, onUserUpdate, currentUserEmail }: UserTableProps) {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState<number | null>(null);
 
-  const handleDelete = async (userId: number) => {
+  const q = search.trim().toLowerCase();
+  const shown = users
+    .filter((u) => !q || [u.name, u.phone, u.email].some((v) => v?.toLowerCase().includes(q)))
+    .sort((a, b) => Number(b.is_admin) - Number(a.is_admin) || (a.name || "").localeCompare(b.name || ""));
+
+  const resetPtp = async (u: User) => {
+    setBusy(u.id);
     try {
-      const userData = localStorage.getItem("user");
-      if (!userData) throw new Error("No user data found");
-      const user = JSON.parse(userData);
-
-      const response = await fetch(
-        `${window.location.origin}/api/admin/users/${userId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-email": user.email,
-            "x-user-ptp": user.ptp || "",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to delete user");
-      }
-
-      toast.success("User deleted successfully", {
-        description: "The user has been permanently removed from the system",
+      const data = await adminFetch(`/api/admin/users/${u.id}/reset-ptp`, "POST");
+      toast.success(`New PTP for ${u.name}: ${data.ptp}`, {
+        description: "Give them the new code. The old one stops working now.",
+        duration: 15000,
       });
       onUserUpdate();
-    } catch (error) {
-      console.error("Delete user error:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete user"
-      );
-    }
-  };
-
-  const handleResetPTP = async (userId: number) => {
-    setLoading(userId);
-    try {
-      const userData = localStorage.getItem("user");
-      if (!userData) throw new Error("No user data found");
-      const user = JSON.parse(userData);
-
-      const targetUser = users.find((u) => u.id === userId);
-      if (!targetUser) throw new Error("User not found");
-
-      const response = await fetch(
-        `${window.location.origin}/api/admin/users/${userId}/reset-ptp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-email": user.email,
-            "x-user-ptp": user.ptp || "",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to reset PTP");
-      }
-
-      const data = await response.json();
-
-      toast.success(
-        <div className="space-y-2">
-          <div className="font-medium">PTP Reset Successful</div>
-          <div className="text-sm">
-            New PTP for {targetUser.name || targetUser.phone || targetUser.email}:
-            <span className="font-mono bg-black/10 px-1 rounded mx-1">
-              {data.ptp}
-            </span>
-          </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            ⚠️ Important Notes:
-            <ul className="list-disc pl-4 mt-1 space-y-1">
-              <li>The user will be logged out from all devices</li>
-              <li>Share this PTP securely with the user</li>
-              <li>The user will need this new PTP to log in again</li>
-              <li>This PTP will only be shown once</li>
-            </ul>
-          </div>
-        </div>,
-        {
-          duration: 15000,
-          important: true,
-        }
-      );
-
-      onUserUpdate();
-    } catch (error) {
-      console.error("Reset PTP error:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to reset PTP"
-      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to reset PTP");
     } finally {
-      setLoading(null);
+      setBusy(null);
     }
   };
 
-  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+  const remove = async (u: User) => {
+    try {
+      await adminFetch(`/api/admin/users/${u.id}`, "DELETE");
+      toast.success(`${u.name} removed`);
+      onUserUpdate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
+    }
   };
-
-  const filteredUsers = users.filter((user) =>
-    Object.values(user).some((value) =>
-      String(value).toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
-
-  const TableRowAnimated = motion(TableRow);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <div className="relative flex-1 max-w-sm">
-          <Input
-            placeholder="Search users..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            className="pl-10 transition-all duration-200 border-muted focus-visible:ring-primary/20"
+    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-4 p-4 border-b border-gray-100">
+        <label className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            placeholder="Search by name or phone"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-full bg-gray-50 border border-gray-200 pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
           />
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-sm text-muted-foreground"
-        >
-          {filteredUsers.length} users found
-        </motion.div>
+        </label>
+        <span className="text-sm text-gray-500">{shown.length} people</span>
       </div>
 
-      <div className="border rounded-lg bg-card flex-1 overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[140px]">Phone</TableHead>
-              <TableHead className="min-w-[200px]">Email</TableHead>
-              <TableHead className="min-w-[150px]">Name</TableHead>
-              <TableHead className="w-[100px]">Admin</TableHead>
-              <TableHead className="min-w-[120px]">PTP</TableHead>
-              <TableHead className="w-[150px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredUsers.map((user, index) => (
-              <TableRowAnimated
-                key={user.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-                className="group hover:bg-muted/50"
-              >
-                <TableCell className="font-medium">{user.phone || "-"}</TableCell>
-                <TableCell>{user.email || "-"}</TableCell>
-                <TableCell>{user.name || "-"}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={user.is_admin ? "default" : "secondary"}
-                    className={`${
-                      user.is_admin
-                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-gray-500 bg-gray-50/60">
+              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Role</th>
+              <th className="px-4 py-3 font-medium">Phone</th>
+              <th className="px-4 py-3 font-medium">Kiosk PTP</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {shown.map((u) => (
+              <tr key={u.id} className="hover:bg-green-50/40 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`grid place-items-center h-9 w-9 shrink-0 rounded-full text-sm font-bold ${
+                        u.is_admin ? "bg-primary text-primary-foreground" : "bg-[#f3e8dc] text-[#7a4420]"
+                      }`}
+                      aria-hidden
+                    >
+                      {initials(u.name || "?")}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{u.name || "Unnamed"}</p>
+                      {u.email && <p className="text-xs text-gray-500 truncate">{u.email}</p>}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      u.is_admin ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"
                     }`}
                   >
-                    {user.is_admin ? "Admin" : "User"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {user.is_admin ? (
-                    <span className="text-muted-foreground italic text-sm">
-                      Not Required
-                    </span>
+                    {u.is_admin ? "Admin" : "Staff"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-700 tabular-nums">{u.phone || "—"}</td>
+                <td className="px-4 py-3">
+                  {u.is_admin ? (
+                    <span className="text-gray-400">—</span>
+                  ) : u.ptp ? (
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(u.ptp!).then(() => toast.success("PTP copied"))}
+                      title="Copy"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent text-accent-foreground px-2.5 py-1 font-mono font-semibold tracking-widest hover:bg-green-100"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      {u.ptp}
+                    </button>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      {user.ptp ? (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <button className="hover:opacity-80 transition-opacity">
-                              <span className="font-mono text-sm bg-primary/10 text-primary px-2 py-1 rounded-md font-medium cursor-pointer hover:bg-primary/20">
-                                {user.ptp}
-                              </span>
-                            </button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-xl flex items-center gap-2">
-                                <span className="text-primary">🔐</span> PTP
-                                Information
-                              </AlertDialogTitle>
-                              <AlertDialogDescription className="space-y-4">
-                                <div className="bg-primary/5 p-4 rounded-lg">
-                                  <p className="font-medium text-base mb-2">
-                                    Current PTP Code:
-                                  </p>
-                                  <code className="font-mono text-xl bg-primary/10 text-primary px-3 py-1.5 rounded-md">
-                                    {user.ptp}
-                                  </code>
-                                </div>
-
-                                <div className="space-y-4">
-                                  <div>
-                                    <h4 className="font-medium text-base mb-2">
-                                      Important Information
-                                    </h4>
-                                    <ul className="text-sm space-y-2 list-disc pl-4">
-                                      <li>
-                                        This PTP code is unique to the user and
-                                        acts as a security key
-                                      </li>
-                                      <li>
-                                        Share this code securely with{" "}
-                                        <span className="font-medium">
-                                          {user.name || user.phone || user.email}
-                                        </span>
-                                      </li>
-                                      <li>
-                                        The user will need this code to log in
-                                        to their account
-                                      </li>
-                                    </ul>
-                                  </div>
-
-                                  <div>
-                                    <h4 className="font-medium text-base mb-2">
-                                      Device Registration
-                                    </h4>
-                                    <ul className="text-sm space-y-2 list-disc pl-4 text-muted-foreground">
-                                      <li>
-                                        When the user logs in with this PTP,
-                                        their current device will be registered
-                                      </li>
-                                      <li>
-                                        Once registered, the user can only
-                                        access the system from that device
-                                      </li>
-                                      <li>
-                                        To use a different device, they will
-                                        need a new PTP code
-                                      </li>
-                                      <li>
-                                        You can generate a new PTP code using
-                                        the reset button if needed
-                                      </li>
-                                    </ul>
-                                  </div>
-
-                                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                    <h4 className="font-medium text-amber-800 flex items-center gap-2 mb-2">
-                                      <span>⚠️</span> Security Notice
-                                    </h4>
-                                    <ul className="text-sm text-amber-700 space-y-1.5 list-disc pl-4">
-                                      <li>
-                                        Never share this PTP code in public or
-                                        unsecured channels
-                                      </li>
-                                      <li>
-                                        The code should be communicated directly
-                                        to the user
-                                      </li>
-                                      <li>
-                                        Advise the user to keep their PTP code
-                                        confidential
-                                      </li>
-                                    </ul>
-                                  </div>
-                                </div>
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogAction className="bg-primary">
-                                I Understand
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      ) : (
-                        <span className="text-muted-foreground italic text-sm">
-                          Not Set
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-gray-400">Not set</span>
                   )}
-                </TableCell>
-                <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          router.push(`/dashboard/users/edit/${user.id}`)
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => router.push(`/dashboard/users/edit/${u.id}`)}
+                      className={`${iconBtn} hover:bg-gray-100 hover:text-gray-900`}
+                      title="Edit"
+                      aria-label={`Edit ${u.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    {!u.is_admin && (
+                      <Confirm
+                        title={`New PTP for ${u.name}?`}
+                        body="Their current code stops working immediately. You'll see the new one after this."
+                        action="Reset PTP"
+                        onConfirm={() => resetPtp(u)}
+                        trigger={
+                          <button
+                            disabled={busy === u.id}
+                            className={`${iconBtn} hover:bg-amber-50 hover:text-amber-700`}
+                            title="Reset PTP"
+                            aria-label={`Reset PTP for ${u.name}`}
+                          >
+                            <RefreshCw className={`h-4 w-4 ${busy === u.id ? "animate-spin" : ""}`} />
+                          </button>
                         }
-                        className="hover:bg-primary/10 hover:text-primary"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-
-                      {!user.is_admin && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={loading === user.id}
-                              className="hover:bg-amber-500/10 hover:text-amber-500"
-                            >
-                              <RefreshCw
-                                className={`h-4 w-4 ${
-                                  loading === user.id ? "animate-spin" : ""
-                                }`}
-                              />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
-                            <AlertDialogHeader className="space-y-4">
-                              <AlertDialogTitle className="text-xl">
-                                Reset User PTP
-                              </AlertDialogTitle>
-                              <AlertDialogDescription className="space-y-4">
-                                <p className="text-base">
-                                  You are about to reset the PTP for user:{" "}
-                                  <span className="font-medium text-foreground">
-                                    {user.name || user.phone || user.email}
-                                  </span>
-                                </p>
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                  <h4 className="font-medium text-amber-800 mb-3 flex items-center gap-2">
-                                    <span className="text-amber-500">⚠️</span>{" "}
-                                    Important Warning
-                                  </h4>
-                                  <ul className="text-sm text-amber-700 list-disc pl-4 space-y-1">
-                                    <li>
-                                      This action will invalidate the user's
-                                      current PTP
-                                    </li>
-                                    <li>
-                                      The user will be immediately logged out
-                                      from all devices
-                                    </li>
-                                    <li>
-                                      You will need to securely communicate the
-                                      new PTP to the user
-                                    </li>
-                                    <li>
-                                      The new PTP will only be shown once after
-                                      reset
-                                    </li>
-                                  </ul>
-                                </div>
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter className="gap-2">
-                              <AlertDialogCancel className="hover:bg-muted/50">
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleResetPTP(user.id)}
-                                className="bg-amber-500 hover:bg-amber-600 text-white"
-                              >
-                                Reset PTP
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-
-                      {user.email !== currentUserEmail && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="hover:bg-red-500/10 hover:text-red-500"
+                      />
+                    )}
+                    {u.email !== currentUserEmail && (
+                      <Confirm
+                        danger
+                        title={`Delete ${u.name}?`}
+                        body="This cannot be undone. Staff with attendance records can't be deleted, so their hours stay in reports."
+                        action="Delete"
+                        onConfirm={() => remove(u)}
+                        trigger={
+                          <button
+                            className={`${iconBtn} hover:bg-red-50 hover:text-red-600`}
+                            title="Delete"
+                            aria-label={`Delete ${u.name}`}
                           >
                             <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete User</AlertDialogTitle>
-                            <AlertDialogDescription className="space-y-2">
-                              <p>
-                                You are about to permanently delete the user:{" "}
-                                <span className="font-medium">
-                                  {user.name || user.phone || user.email}
-                                </span>
-                              </p>
-                              <div className="bg-red-50 border border-red-200 rounded-md p-3 mt-2">
-                                <h4 className="font-medium text-red-800 mb-2">
-                                  ⚠️ Warning
-                                </h4>
-                                <ul className="text-sm text-red-700 list-disc pl-4 space-y-1">
-                                  <li>This action cannot be undone</li>
-                                  <li>
-                                    The user will be permanently removed from
-                                    the system
-                                  </li>
-                                  <li>All associated data will be deleted</li>
-                                  <li>
-                                    The user will need to be recreated to regain
-                                    access
-                                  </li>
-                                </ul>
-                              </div>
-                              <p className="mt-3 text-sm font-medium">
-                                Are you absolutely sure you want to proceed?
-                              </p>
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(user.id)}
-                              className="bg-red-500 hover:bg-red-600 text-white"
-                            >
-                              Delete Permanently
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      )}
-                    </div>
-                </TableCell>
-              </TableRowAnimated>
+                          </button>
+                        }
+                      />
+                    )}
+                  </div>
+                </td>
+              </tr>
             ))}
-            {filteredUsers.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  <div className="text-muted-foreground">No users found</div>
-                </TableCell>
-              </TableRow>
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-12 text-center text-gray-500">
+                  {users.length === 0 ? "No staff yet. Add your first person." : "Nobody matches that search."}
+                </td>
+              </tr>
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
     </div>
   );

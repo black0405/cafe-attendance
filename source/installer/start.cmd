@@ -21,7 +21,6 @@ set "DB=%DATA:\=/%"
 set "DATABASE_URL=file:%DB%/attendance.db"
 rem Not 3000: dev servers (React, Next, etc.) usually hold it.
 set "PORT=3789"
-set "WEBAUTHN_ORIGIN=http://localhost:%PORT%"
 set "HOSTNAME=127.0.0.1"
 set "NODE_ENV=production"
 
@@ -43,6 +42,6 @@ echo Server did not start (port %PORT% in use?). See %DATA%\server.err.log
 exit /b 1
 
 :open
-rem WebAuthn rpID is "localhost", so the browser must open localhost, not 127.0.0.1.
+rem Camera access needs a secure origin; the browser treats localhost as one.
 start "" msedge --app=http://localhost:%PORT%/kiosk 2>nul || start "" http://localhost:%PORT%/kiosk
 endlocal

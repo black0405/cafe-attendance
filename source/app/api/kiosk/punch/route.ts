@@ -1,78 +1,31 @@
 import { NextResponse } from "next/server";
-import {
-  generateAuthenticationOptions,
-  verifyAuthenticationResponse,
-} from "@simplewebauthn/server";
-import { prisma } from "@/lib/prisma";
-import { rpID, origin, sealChallenge, openChallenge } from "@/lib/webauthn";
+import { matchFace, DESCRIPTOR_LENGTH } from "@/lib/face";
 import { applyPunch } from "@/lib/punch";
+import { prisma } from "@/lib/prisma";
 
-// Step 1: employee taps their name; get a challenge bound to their credentials.
-export async function GET(request: Request) {
-  const userId = Number(new URL(request.url).searchParams.get("userId"));
-  const creds = await prisma.webauthnCredential.findMany({
-    where: { userId, user: { archived: false } },
-    select: { id: true },
-  });
-  if (creds.length === 0) {
-    return NextResponse.json({ error: "Not enrolled" }, { status: 404 });
-  }
+export const dynamic = "force-dynamic";
 
-  const options = await generateAuthenticationOptions({
-    rpID,
-    allowCredentials: creds.map((c) => ({ id: c.id })),
-    userVerification: "required",
-  });
-
-  return NextResponse.json({
-    options,
-    token: await sealChallenge(options.challenge, userId),
-  });
-}
-
-// Step 2: fingerprint signed the challenge; verify and toggle clock in/out.
+// Public (kiosk): { userId, descriptor: number[128], ptp, action } -> punch.
+// Two checks: the server re-matches the face itself, and the person types their
+// PTP. A punch only lands when both belong to the staff member the kiosk showed.
 export async function POST(request: Request) {
   try {
-    const { token, response, action } = await request.json();
-    const { challenge, userId } = await openChallenge(token);
-
-    const cred = await prisma.webauthnCredential.findUnique({
-      where: { id: response.id },
-    });
-    if (!cred || cred.userId !== userId) {
-      return NextResponse.json(
-        { error: "Unknown credential" },
-        { status: 400 }
-      );
+    const { userId, descriptor, ptp, action } = await request.json();
+    if (!Array.isArray(descriptor) || descriptor.length !== DESCRIPTOR_LENGTH) {
+      return NextResponse.json({ error: "Look at the camera to clock in" }, { status: 400 });
+    }
+    const match = await matchFace(descriptor);
+    if (!match || match.userId !== Number(userId)) {
+      return NextResponse.json({ error: "Face not recognised, try again" }, { status: 401 });
     }
 
-    const { verified, authenticationInfo } =
-      await verifyAuthenticationResponse({
-        response,
-        expectedChallenge: challenge,
-        expectedOrigin: origin,
-        expectedRPID: rpID,
-        requireUserVerification: true,
-        credential: {
-          id: cred.id,
-          publicKey: new Uint8Array(cred.publicKey),
-          counter: cred.counter,
-        },
-      });
-    if (!verified) {
-      return NextResponse.json(
-        { error: "Verification failed" },
-        { status: 401 }
-      );
+    const user = await prisma.user.findUnique({ where: { id: match.userId }, select: { ptp: true } });
+    if (!user?.ptp || String(ptp ?? "") !== user.ptp) {
+      return NextResponse.json({ error: "Wrong PTP" }, { status: 401 });
     }
-
-    await prisma.webauthnCredential.update({
-      where: { id: cred.id },
-      data: { counter: authenticationInfo.newCounter },
-    });
 
     const now = new Date();
-    const result = await applyPunch(userId, action === "lunch" ? "lunch" : "punch", now);
+    const result = await applyPunch(match.userId, action === "lunch" ? "lunch" : "punch", now);
     return NextResponse.json({ action: result, timestamp: now });
   } catch (error) {
     console.error("Punch error:", error);

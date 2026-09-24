@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, loginWhere, normalizePhone } from "@/lib/auth";
 
@@ -80,11 +81,11 @@ export async function POST(request: Request) {
     const newUserEmail = body.email ? String(body.email).trim() : null;
     const { password, name, is_admin } = body;
 
-    if (phone.length < 6 || !password) {
-      return NextResponse.json(
-        { error: "Phone number and password are required" },
-        { status: 400 }
-      );
+    if (phone.length < 6) {
+      return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
+    }
+    if (is_admin && !password) {
+      return NextResponse.json({ error: "Admins need a password" }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -106,7 +107,8 @@ export async function POST(request: Request) {
       data: {
         email: newUserEmail,
         phone,
-        password: await hashPassword(password),
+        // Staff sign in with the PTP; their stored password is random and never used.
+        password: await hashPassword(password || crypto.randomUUID()),
         name,
         is_admin,
         ptp,

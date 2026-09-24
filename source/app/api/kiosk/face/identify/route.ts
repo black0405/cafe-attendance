@@ -4,7 +4,7 @@ import { matchFace, DESCRIPTOR_LENGTH } from "@/lib/face";
 export const dynamic = "force-dynamic";
 
 // Public (kiosk): { descriptor: number[128] } -> { userId, name } or 404.
-// Identification only; the punch itself still needs the fingerprint signature.
+// Identification only; /api/kiosk/punch re-matches the face before recording.
 export async function POST(request: Request) {
   const { descriptor } = await request.json().catch(() => ({}));
   if (!Array.isArray(descriptor) || descriptor.length !== DESCRIPTOR_LENGTH) {

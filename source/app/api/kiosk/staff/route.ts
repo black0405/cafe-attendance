@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Public: kiosk screen lists staff so an employee can tap their name.
+// Public: kiosk screen lists staff and who is clocked in.
 export async function GET() {
   const users = await prisma.user.findMany({
     where: { archived: false, is_admin: false },
@@ -12,7 +12,6 @@ export async function GET() {
       id: true,
       name: true,
       phone: true,
-      credentials: { select: { id: true } },
       faces: { select: { id: true }, take: 1 },
       records: {
         where: { clockOut: null },
@@ -26,7 +25,6 @@ export async function GET() {
     users.map((u) => ({
       id: u.id,
       name: u.name || u.phone || `Staff #${u.id}`,
-      enrolled: u.credentials.length > 0,
       faceEnrolled: u.faces.length > 0,
       clockedInAt: u.records[0]?.clockIn ?? null,
       onLunchSince:

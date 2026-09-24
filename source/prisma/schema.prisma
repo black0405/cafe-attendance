@@ -20,7 +20,6 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   records      AttendanceRecord[]
-  credentials  WebauthnCredential[]
   faces        FaceDescriptor[]
 
   @@map("users")
@@ -55,16 +54,4 @@ model Setting {
   value String
 
   @@map("settings")
-}
-
-model WebauthnCredential {
-  id        String   @id
-  userId    Int      @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  publicKey Bytes    @map("public_key")
-  counter   Int      @default(0)
-  label     String?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("webauthn_credentials")
 }
