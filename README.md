@@ -29,6 +29,8 @@ No cloud, no Docker, no server to rent. One installer, one SQLite file.
 
 On first launch the app opens a **Welcome** screen: enter a name, email and password (8+ characters) to create the admin account. There is no default login. The screen only appears while no accounts exist.
 
+**Forgot the admin password?** Click **Forgot password?** on the sign-in screen, then **Get reset code**. A 6-digit code is written to `%LOCALAPPDATA%\CafeAttendance\password-reset-code.txt` on the laptop. Open it, type the code with your admin email or phone and a new password. The code lasts 15 minutes and stops working after 5 wrong tries.
+
 The server runs hidden. Use **Stop Cafe Attendance** in the Start Menu to stop it.
 **Uninstall Cafe Attendance** is in the Start Menu too (also under Settings, Apps). It asks whether to delete the attendance data.
 Data lives in `%LOCALAPPDATA%\CafeAttendance\attendance.db`. Back it up by copying that file. Logs are next to it.

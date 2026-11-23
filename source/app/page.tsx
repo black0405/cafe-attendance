@@ -308,6 +308,11 @@ export default function LoginPage() {
                       className="pl-8"
                     />
                   </div>
+                  <div className="text-right">
+                    <a href="/forgot" className="text-sm text-primary hover:underline">
+                      Forgot password?
+                    </a>
+                  </div>
                 </motion.div>
 
                 {error && (
