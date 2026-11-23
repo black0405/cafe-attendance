@@ -24,6 +24,7 @@ import {
   User,
   Key,
   ArrowRight,
+  ScanFace,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ChangeEvent, FormEvent } from "react";
@@ -350,6 +351,12 @@ export default function LoginPage() {
                         <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </Fragment>
                     )}
+                  </Button>
+                  <Button asChild variant="outline" className="w-full mt-3">
+                    <a href="/kiosk">
+                      <ScanFace className="mr-2 h-4 w-4" />
+                      Open kiosk
+                    </a>
                   </Button>
                 </motion.div>
               </form>
